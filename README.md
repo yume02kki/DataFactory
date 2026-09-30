@@ -157,6 +157,11 @@ sudo systemctl start datafactory-sync   # check for a new push right now
 
 Settings can be passed to the installer as environment variables: `BRANCH`,
 `APP_DIR`, `PORT`, `INTERVAL`. Running it again is safe and updates the setup.
+To serve on the standard web port so the app is at `http://<server>/`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yume02kki/DataFactory/dev/deploy/install.sh | PORT=80 bash
+```
 
 ## Project layout
 

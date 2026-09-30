@@ -58,6 +58,8 @@ User=$RUN_USER
 WorkingDirectory=$APP_DIR
 Environment=PATH=$(dirname "$NPM"):/usr/local/bin:/usr/bin:/bin
 ExecStart=$NPM run dev -- --host 0.0.0.0 --port $PORT --strictPort
+# Lets the app use a port below 1024 (e.g. PORT=80) without running as root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 Restart=always
 RestartSec=3
 
