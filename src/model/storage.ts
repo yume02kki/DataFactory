@@ -4,8 +4,12 @@ import { inputCells, lPath, normalizeOffsets, outputCells } from './geometry';
 import { applyRecipes, paintBelt } from './ops';
 import type { Arrow, BeltTile, Blueprint, CombineMode, Dir, FactoryNode, ItemType, Pipeline } from './types';
 
-const LIBRARY_KEY = 'datafactory.library.v1';
-const CURRENT_KEY = 'datafactory.current.v1';
+// Preview channels (e.g. the /dev site) keep their own saved factories, so an
+// experimental build can't disturb the factories saved on the main site.
+const CHANNEL = typeof __BUILD_INFO__ !== 'undefined' && __BUILD_INFO__.channel !== 'main' ? __BUILD_INFO__.channel : '';
+const PREFIX = CHANNEL ? `datafactory.${CHANNEL}.` : 'datafactory.';
+const LIBRARY_KEY = `${PREFIX}library.v1`;
+const CURRENT_KEY = `${PREFIX}current.v1`;
 
 export interface LibraryEntry {
   id: string;

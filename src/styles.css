@@ -1904,3 +1904,61 @@ select:focus {
 .icon-image {
   flex: none;
 }
+
+/* ---------- preview channel pill (e.g. /dev) ---------- */
+
+.channel-pill {
+  position: absolute;
+  left: 288px;
+  top: 68px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 5px 12px 5px 5px;
+  border-radius: 999px;
+  background: var(--panel-solid);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 11.5px;
+  text-decoration: none;
+}
+
+.channel-pill:hover {
+  border-color: var(--warn);
+}
+
+.channel-name {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--warn);
+  color: #fff;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10.5px;
+}
+
+.channel-time {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.channel-msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .channel-pill {
+    top: 8px;
+    bottom: auto;
+    right: auto;
+    left: 8px;
+    max-width: calc(100vw - 16px);
+  }
+}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Canvas } from './components/Canvas';
+import { ChannelPill } from './components/ChannelPill';
 import { HelpDialog } from './components/HelpDialog';
 import { Inspector } from './components/Inspector';
 import { KindIcon } from './components/KindIcon';
@@ -176,6 +177,7 @@ export default function App() {
       <Inspector />
       {empty && <EmptyState />}
       <Hotbar />
+      <ChannelPill />
       {toast && (
         <div className="toast" key={toast.id} role="status">
           {toast.text}

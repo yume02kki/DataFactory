@@ -141,38 +141,35 @@ hand-edited file with dangling references still loads.
 
 ## Deploy server
 
-A server can follow the `dev` branch on its own, without GitHub Actions or
-webhooks. Run this once on the server (Ubuntu, as the user that should own the
-app):
+A server can follow the branches on its own, without GitHub Actions or webhooks:
+
+| URL | Serves |
+| --- | --- |
+| `/` | a production build of `main` |
+| `/dev/` | a production build of `dev`, with a small pill in the corner naming the channel, when the commit was made and its message (links to the commit) |
+
+Run this once on the server (Ubuntu, as the user that should own the app):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/yume02kki/DataFactory/dev/deploy/install.sh | bash
 ```
 
-It installs Node.js 22 and git if they're missing, clones `dev` to `~/DataFactory`
-and sets up two systemd services:
-
-- `datafactory` runs `npm run dev` on port 5173 (reachable from outside) and
-  restarts it if it crashes.
-- `datafactory-sync` (a timer) checks GitHub every 30 seconds. When `dev` has
-  new commits it pulls them, runs `npm ci` if dependencies changed, and
-  restarts the dev server.
-
-So a push to `dev` is live within about 30 seconds. Useful commands on the server:
+It installs git, Node.js 22 and nginx if they're missing, clones both branches to
+`~/datafactory/{main,dev}`, points nginx at the builds in `/var/www/datafactory`,
+and sets up `datafactory-sync`, a timer that checks GitHub every 30 seconds. When
+a branch has new commits it pulls them, runs `npm ci` if dependencies changed,
+builds, and swaps the new build in. A push is live within about a minute. If a
+build fails, the site keeps its previous version and that commit isn't retried
+until the branch moves again. The two sites keep separate saved factories in the
+browser, so trying something on `/dev` can't disturb the factories on `/`.
 
 ```bash
-journalctl -u datafactory-sync -f   # watch deploys
-journalctl -u datafactory -f        # dev server output
-sudo systemctl start datafactory-sync   # check for a new push right now
+journalctl -u datafactory-sync -f        # watch deploys
+sudo systemctl start datafactory-sync    # check for new pushes right now
 ```
 
-Settings can be passed to the installer as environment variables: `BRANCH`,
-`APP_DIR`, `PORT`, `INTERVAL`. Running it again is safe and updates the setup.
-To serve on the standard web port so the app is at `http://<server>/`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/yume02kki/DataFactory/dev/deploy/install.sh | PORT=80 bash
-```
+Settings can be passed to the installer as environment variables: `BASE`, `WWW`,
+`PORT`, `INTERVAL`. Running it again is safe and updates the setup.
 
 ## Project layout
 
