@@ -39,6 +39,28 @@ rejected ones. Destroying a block that holds a shape together splits it into
 separate buildings. `R` rotates the whole shape. Buildings of different types
 placed directly in front of each other hand items over without a belt.
 
+Buffers and stores are drawn as **tanks**, not machines: rounded vessels with
+liquid inside. A buffer is half full, with its queued items bobbing at the
+surface. A store is nearly full and hooped like a silo, because data stays there.
+
+### Combining item looks
+
+A machine can build the look of what it produces from what it consumes, like
+shapez's stacker, painter and mixer. In the machine's inspector, **Combine** has
+four modes. Inputs are lettered A, B, … in order, and **⇄ Reorder** changes which
+one is A.
+
+| Mode | Output looks like |
+| --- | --- |
+| Own | Whatever look you give the output item |
+| Stack | A at the bottom, B stacked on top (a yellow star + an orange ball → a star with a ball on it) |
+| Paint | A's shape in B's colour |
+| Mix | A's shape with all the input colours mixed as light (red + green → yellow) |
+
+The machine's output items take that look on every belt, and it updates when the
+inputs change, including through chains of combining machines. Set the machine
+back to *Own* and the items return to their own shape and colour.
+
 The app is **technology-agnostic**. Nothing is built in for any specific tool.
 Every building has:
 

@@ -47,7 +47,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <p className="muted small">
           Items enter a building on the side with inward arrows and leave on the side with outward arrows. Lay belts from one building's
           output side into the next building's input side. Matching blocks that touch join into one building of any shape, with a port on
-          every exposed face. Every building is generic: its <b>type</b> says what role it plays and its{' '}
+          every exposed face. A machine's <b>Combine</b> setting can stack, paint or mix its inputs' looks into its outputs. Every building is generic: its <b>type</b> says what role it plays and its{' '}
           <b>technology</b> is free text.
         </p>
         <table className="controls">

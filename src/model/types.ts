@@ -16,6 +16,12 @@ export interface ItemField {
   type: string;
 }
 
+/** One shape in an item's look. Layers are drawn bottom to top, each smaller than the last. */
+export interface ItemLayer {
+  shape: ItemShape;
+  color: string;
+}
+
 /** The data that flows through the factory (`Visit`, `Order`, `File`...). */
 export interface ItemType {
   id: string;
@@ -24,7 +30,21 @@ export interface ItemType {
   color: string;
   description: string;
   fields: ItemField[];
+  /** Look worked out by a combining machine from its inputs; replaces shape/colour while set. */
+  layers?: ItemLayer[];
+  /** The machine whose combine mode produced `layers`. */
+  derivedFrom?: string | null;
 }
+
+/**
+ * How a machine builds the look of what it produces from what it consumes
+ * (A = its first input, B = its second, ...):
+ * - own:   outputs keep their own look
+ * - stack: A at the bottom, B on top of it, ... (like shapez's stacker)
+ * - paint: A's shape in B's colour
+ * - mix:   A's shape with all input colours mixed as light
+ */
+export type CombineMode = 'own' | 'stack' | 'paint' | 'mix';
 
 /**
  * A user-defined component type that shows up in the palette,
@@ -65,7 +85,9 @@ export interface FactoryNode {
    * Every exposed front face is an output port and every exposed back face an input port.
    */
   cells: Array<[number, number]>;
-  /** Item type ids this component consumes. */
+  /** How this machine derives its outputs' look from its inputs. */
+  combine?: CombineMode;
+  /** Item type ids this component consumes, in order (A, B, ...). */
   inputs: string[];
   /** Item type ids this component produces. */
   outputs: string[];

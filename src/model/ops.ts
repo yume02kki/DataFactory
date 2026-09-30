@@ -15,7 +15,7 @@ import {
   type Pt,
 } from './geometry';
 import { uid } from './ids';
-import type { BeltTile, Dir, FactoryNode, Pipeline } from './types';
+import type { BeltTile, CombineMode, Dir, FactoryNode, ItemLayer, ItemType, Pipeline } from './types';
 
 /**
  * Pure (draft-mutating) grid operations shared by the store, canvas and tests.
@@ -401,5 +401,85 @@ export function copyName(p: Pipeline, name: string): string {
   for (let i = 2; ; i++) {
     const candidate = `${base} ${i}`;
     if (!taken.has(candidate)) return candidate;
+  }
+}
+
+/* ---------- item looks ---------- */
+
+export const MAX_LAYERS = 4;
+
+/** What an item looks like: its derived layers, or its own shape and colour. */
+export function lookOf(item: Pick<ItemType, 'shape' | 'color' | 'layers'>): ItemLayer[] {
+  return item.layers?.length ? item.layers : [{ shape: item.shape, color: item.color }];
+}
+
+function parseHex(hex: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const v = parseInt(m[1], 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+
+/** Mixes colours as light, like shapez's mixer: red + green → yellow, red + blue → purple. */
+export function mixColors(colors: string[]): string {
+  const rgb = colors.map(parseHex).filter((c): c is [number, number, number] => !!c);
+  if (!rgb.length) return colors[0] ?? '#aaaaaa';
+  const out = [0, 1, 2].map((i) => Math.max(...rgb.map((c) => c[i])));
+  return `#${out.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Combines input looks (A first) into an output look. */
+export function combineLooks(mode: CombineMode, looks: ItemLayer[][]): ItemLayer[] | null {
+  const [a, b] = looks;
+  if (mode === 'own' || !a) return null;
+  if (mode === 'stack') return looks.flat().slice(0, MAX_LAYERS);
+  if (mode === 'paint') {
+    const paint = b ? b[b.length - 1].color : a[0].color;
+    return a.map((l) => ({ ...l, color: paint }));
+  }
+  const mixed = mixColors(looks.map((l) => l[0].color));
+  return a.map((l) => ({ ...l, color: mixed }));
+}
+
+/**
+ * Gives every item produced by a combining machine the look built from that
+ * machine's inputs, following chains of combiners; items no machine derives
+ * go back to their own look. Only writes when something actually changes.
+ */
+export function applyRecipes(p: Pipeline) {
+  const byId = new Map(p.items.map((i) => [i.id, i]));
+  const derived = new Map<string, { layers: ItemLayer[]; from: string }>();
+  const look = (id: string) => {
+    const item = byId.get(id);
+    return derived.get(id)?.layers ?? (item ? [{ shape: item.shape, color: item.color }] : null);
+  };
+  const combiners = p.nodes.filter((n) => n.kind === 'machine' && n.combine && n.combine !== 'own');
+  for (let pass = 0; pass <= combiners.length; pass++) {
+    let changed = false;
+    for (const n of combiners) {
+      const looks = n.inputs.map(look).filter((l): l is ItemLayer[] => !!l);
+      const result = combineLooks(n.combine!, looks);
+      if (!result) continue;
+      for (const out of n.outputs) {
+        if (n.inputs.includes(out)) continue;
+        const prev = derived.get(out);
+        if (prev && prev.from !== n.id) continue; // the first machine to claim an item wins
+        if (!prev || JSON.stringify(prev.layers) !== JSON.stringify(result)) {
+          derived.set(out, { layers: result, from: n.id });
+          changed = true;
+        }
+      }
+    }
+    if (!changed) break;
+  }
+  for (const item of p.items) {
+    const d = derived.get(item.id);
+    if (d) {
+      if (item.derivedFrom !== d.from) item.derivedFrom = d.from;
+      if (JSON.stringify(item.layers) !== JSON.stringify(d.layers)) item.layers = d.layers;
+    } else if (item.derivedFrom || item.layers) {
+      delete item.layers;
+      delete item.derivedFrom;
+    }
   }
 }

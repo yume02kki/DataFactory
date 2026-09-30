@@ -95,7 +95,7 @@ function ItemsSection({ collapsed, onToggle }: { collapsed: boolean; onToggle: (
               onMouseLeave={() => setHighlightItem(null)}
               title="Drag onto a belt or building · click to edit"
             >
-              <ItemIcon shape={item.shape} color={item.color} size={16} />
+              <ItemIcon shape={item.shape} color={item.color} layers={item.layers} size={16} />
               <span>{item.name || 'Unnamed'}</span>
             </button>
           ))}

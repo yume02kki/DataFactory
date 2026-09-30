@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ITEM_SHAPES, KIND_META, SWATCHES } from '../model/defaults';
 import { uid } from '../model/ids';
 import * as ops from '../model/ops';
-import type { FactoryNode, ItemType, Pipeline } from '../model/types';
+import type { CombineMode, FactoryNode, ItemType, Pipeline } from '../model/types';
 import { BeltIcon } from './Hotbar';
 import { inputCells, outputCells } from '../model/geometry';
 import { useFactory } from '../store/useFactory';
@@ -92,11 +92,12 @@ function Swatches({ value, onChange, first }: { value: string; onChange: (c: str
   );
 }
 
-function ItemChip({ item, onRemove, onClick }: { item: ItemType; onRemove?: () => void; onClick?: () => void }) {
+function ItemChip({ item, onRemove, onClick, badge }: { item: ItemType; onRemove?: () => void; onClick?: () => void; badge?: string }) {
   return (
     <span className="item-chip small" onMouseEnter={() => useFactory.getState().setHighlightItem(item.id)} onMouseLeave={() => useFactory.getState().setHighlightItem(null)}>
       <button type="button" className="chip-main" onClick={onClick ?? (() => useFactory.getState().select({ item: item.id }))} title="Edit item">
-        <ItemIcon shape={item.shape} color={item.color} size={14} />
+        {badge && <span className="chip-badge">{badge}</span>}
+        <ItemIcon shape={item.shape} color={item.color} layers={item.layers} size={14} />
         <span>{item.name || 'Unnamed'}</span>
       </button>
       {onRemove && (
@@ -165,6 +166,52 @@ function technologies(p: Pipeline): string[] {
   return [...set].sort((a, b) => a.localeCompare(b));
 }
 
+/* ---------- combining ---------- */
+
+const COMBINE_MODES: Array<{ mode: CombineMode; label: string; hint: string }> = [
+  { mode: 'own', label: 'Own', hint: 'Outputs keep the look you give them.' },
+  { mode: 'stack', label: 'Stack', hint: 'A at the bottom, B stacked on top of it (and C on B…).' },
+  { mode: 'paint', label: 'Paint', hint: "A's shape in B's colour." },
+  { mode: 'mix', label: 'Mix', hint: "A's shape with every input's colour mixed like light." },
+];
+
+/** Picks how a machine builds its outputs' look from its inputs, with a live preview. */
+function CombineEditor({ node, itemsById, onChange }: { node: FactoryNode; itemsById: Map<string, ItemType>; onChange: (mode: CombineMode) => void }) {
+  const mode = node.combine ?? 'own';
+  const inputs = node.inputs.map((id) => itemsById.get(id)).filter((i): i is ItemType => !!i);
+  const result = ops.combineLooks(mode, inputs.map(ops.lookOf));
+  const produced = node.outputs.filter((id) => !node.inputs.includes(id)).map((id) => itemsById.get(id)).filter((i): i is ItemType => !!i);
+  const hint = COMBINE_MODES.find((m) => m.mode === mode)!.hint;
+  return (
+    <Section title="Combine">
+      <div className="segmented" role="radiogroup" aria-label="How outputs look">
+        {COMBINE_MODES.map((m) => (
+          <button key={m.mode} role="radio" aria-checked={mode === m.mode} className={mode === m.mode ? 'on' : ''} onClick={() => onChange(m.mode)} title={m.hint}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <p className="muted small">{hint}</p>
+      {result && (
+        <div className="recipe">
+          {inputs.map((it, i) => (
+            <span key={it.id} className="recipe-part">
+              {i > 0 && <span className="recipe-op">+</span>}
+              <ItemIcon shape={it.shape} color={it.color} layers={it.layers} size={26} />
+            </span>
+          ))}
+          <span className="recipe-op">→</span>
+          <ItemIcon shape={result[0].shape} color={result[0].color} layers={result} size={34} />
+          <span className="muted small">
+            {produced.length ? `becomes ${produced.map((p) => p.name).join(', ')}` : 'add an output item to see it on the belts'}
+          </span>
+        </div>
+      )}
+      {mode !== 'own' && inputs.length === 0 && <p className="muted small">Add inputs to combine.</p>}
+    </Section>
+  );
+}
+
 /* ---------- node ---------- */
 
 function portSummary(node: FactoryNode): string {
@@ -192,11 +239,13 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
   const outgoing = links.filter((l) => l.from === node.id);
   const nameOf = (id: string) => pipeline.nodes.find((n) => n.id === id)?.name ?? '?';
 
+  const combining = node.kind === 'machine' && !!node.combine && node.combine !== 'own';
   const listEditor = (list: 'inputs' | 'outputs') => (
     <div className="chip-row">
-      {node[list].map((id) => {
+      {node[list].map((id, i) => {
         const item = itemsById.get(id);
-        return item ? <ItemChip key={id} item={item} onRemove={() => set(list, node[list].filter((x) => x !== id))} /> : null;
+        const badge = combining && list === 'inputs' ? String.fromCharCode(65 + i) : undefined;
+        return item ? <ItemChip key={id} item={item} badge={badge} onRemove={() => set(list, node[list].filter((x) => x !== id))} /> : null;
       })}
       <ItemPicker exclude={node[list]} items={pipeline.items} onPick={(id) => edit((p) => {
         const n = p.nodes.find((x) => x.id === node.id);
@@ -250,8 +299,22 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
         </div>
       </Field>
 
-      {meta.hasInput && <Section title="Inputs">{listEditor('inputs')}</Section>}
+      {meta.hasInput && (
+        <Section
+          title={combining ? 'Inputs · A, B, …' : 'Inputs'}
+          action={
+            combining && node.inputs.length > 1 ? (
+              <button className="link-btn" title="Move A to the end so B becomes A" onClick={() => set('inputs', [...node.inputs.slice(1), node.inputs[0]])}>
+                ⇄ Reorder
+              </button>
+            ) : undefined
+          }
+        >
+          {listEditor('inputs')}
+        </Section>
+      )}
       {meta.hasOutput && <Section title="Outputs">{listEditor('outputs')}</Section>}
+      {node.kind === 'machine' && <CombineEditor node={node} itemsById={itemsById} onChange={(mode) => set('combine', mode)} />}
 
       <Section
         title="Metadata"
@@ -321,7 +384,7 @@ function ConnRow({ tileId, dir, other, item }: { tileId: string; dir: 'in' | 'ou
     <button className="conn-row" onClick={() => useFactory.getState().select({ belt: tileId })}>
       <span className="conn-dir">{dir === 'in' ? '←' : '→'}</span>
       <span className="conn-name">{other}</span>
-      {item ? <ItemIcon shape={item.shape} color={item.color} size={14} /> : <span className="muted small">nothing</span>}
+      {item ? <ItemIcon shape={item.shape} color={item.color} layers={item.layers} size={14} /> : <span className="muted small">nothing</span>}
     </button>
   );
 }
@@ -408,7 +471,7 @@ function BeltInspector({ tileId, link, pipeline }: { tileId: string; link?: ops.
               className={`item-chip small selectable${link.itemId === i.id ? ' active' : ''}${suggested.includes(i.id) ? '' : ' faint'}`}
               onClick={() => setItem(link.explicit && link.itemId === i.id ? null : i.id)}
             >
-              <ItemIcon shape={i.shape} color={i.color} size={14} />
+              <ItemIcon shape={i.shape} color={i.color} layers={i.layers} size={14} />
               <span>{i.name}</span>
             </button>
           ))}
@@ -466,10 +529,14 @@ function ItemInspector({ item, pipeline, links }: { item: ItemType; pipeline: Pi
 
   return (
     <div className="insp-body">
-      <Header icon={<ItemIcon shape={item.shape} color={item.color} size={36} />} eyebrow="Item" title={item.name || 'Unnamed'} />
+      <Header icon={<ItemIcon shape={item.shape} color={item.color} layers={item.layers} size={36} />} eyebrow="Item" title={item.name || 'Unnamed'} />
       <Field label="Name">
         <input value={item.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Visit, Order, File" />
       </Field>
+      {item.derivedFrom ? (
+        <DerivedNote item={item} pipeline={pipeline} />
+      ) : (
+        <>
       <Field label="Shape">
         <div className="shape-picker">
           {ITEM_SHAPES.map((s) => (
@@ -482,6 +549,8 @@ function ItemInspector({ item, pipeline, links }: { item: ItemType; pipeline: Pi
       <Field label="Colour">
         <Swatches value={item.color} onChange={(c) => set('color', c)} />
       </Field>
+        </>
+      )}
       <Field label="Description">
         <textarea rows={2} value={item.description} onChange={(e) => set('description', e.target.value)} placeholder="What does one of these represent?" />
       </Field>
@@ -527,6 +596,27 @@ function ItemInspector({ item, pipeline, links }: { item: ItemType; pipeline: Pi
           Delete item
         </button>
       </div>
+    </div>
+  );
+}
+
+function DerivedNote({ item, pipeline }: { item: ItemType; pipeline: Pipeline }) {
+  const machine = pipeline.nodes.find((n) => n.id === item.derivedFrom);
+  const label = COMBINE_MODES.find((m) => m.mode === machine?.combine)?.label.toLowerCase() ?? 'combine';
+  return (
+    <div className="derived-note">
+      <ItemIcon shape={item.shape} color={item.color} layers={item.layers} size={30} />
+      <p className="small">
+        This look is made by{' '}
+        {machine ? (
+          <button className="link-btn" onClick={() => useFactory.getState().selectNodes([machine.id])}>
+            {machine.name}
+          </button>
+        ) : (
+          'a machine'
+        )}{' '}
+        ({label}) from its inputs. Set that machine to <i>Own</i> to style this item yourself.
+      </p>
     </div>
   );
 }

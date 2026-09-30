@@ -119,6 +119,8 @@ export const useFactory = create<FactoryState>()((set, get) => {
       }
       const next = produce(get().pipeline, (draft) => {
         recipe(draft);
+        // Keep combined item looks in step with whatever just changed.
+        ops.applyRecipes(draft);
         draft.updatedAt = now;
       });
       set({

@@ -1,8 +1,8 @@
 import { KIND_META, NODE_KINDS, ITEM_SHAPES, starterBlueprints } from './defaults';
 import { uid } from './ids';
 import { inputCells, lPath, normalizeOffsets, outputCells } from './geometry';
-import { paintBelt } from './ops';
-import type { BeltTile, Blueprint, Dir, FactoryNode, ItemType, Pipeline } from './types';
+import { applyRecipes, paintBelt } from './ops';
+import type { BeltTile, Blueprint, CombineMode, Dir, FactoryNode, ItemType, Pipeline } from './types';
 
 const LIBRARY_KEY = 'datafactory.library.v1';
 const CURRENT_KEY = 'datafactory.current.v1';
@@ -135,6 +135,7 @@ export function normalizePipeline(input: unknown): Pipeline {
         y: Math.round(num(o.y)),
         rotation: ([0, 1, 2, 3].includes(o.rotation as number) ? o.rotation : 0) as Dir,
         cells: readCells(o, ([0, 1, 2, 3].includes(o.rotation as number) ? o.rotation : 0) as Dir),
+        ...(kind === 'machine' && ['stack', 'paint', 'mix'].includes(o.combine as string) ? { combine: o.combine as CombineMode } : {}),
         inputs: KIND_META[kind].hasInput ? ids(o.inputs) : [],
         outputs: KIND_META[kind].hasOutput ? ids(o.outputs) : [],
         metadata: arr(o.metadata).map((m) => {
@@ -166,7 +167,7 @@ export function normalizePipeline(input: unknown): Pipeline {
   migrateLinkBelts(draft, rawBelts, itemIds);
   const view = obj(raw.view);
   const now = Date.now();
-  return {
+  const pipeline: Pipeline = {
     id: str(raw.id) || uid('pipe'),
     name: str(raw.name, 'Untitled factory'),
     description: str(raw.description),
@@ -178,6 +179,9 @@ export function normalizePipeline(input: unknown): Pipeline {
     createdAt: num(raw.createdAt, now),
     updatedAt: num(raw.updatedAt, now),
   };
+  // Combined looks are always rebuilt from the machines rather than trusted from the file.
+  applyRecipes(pipeline);
+  return pipeline;
 }
 
 /**

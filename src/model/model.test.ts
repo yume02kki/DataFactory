@@ -325,3 +325,60 @@ describe('the example and files', () => {
     expect(p.belts[0].dir).toBe(0);
   });
 });
+
+describe('combining item looks', () => {
+  const setup = (combine: 'own' | 'stack' | 'paint' | 'mix') => {
+    const p = blankPipeline();
+    const ball = makeItem({ name: 'Ball', shape: 'circle', color: '#ff666a' });
+    const star = makeItem({ name: 'Star', shape: 'star', color: '#fcf52a' });
+    const out = makeItem({ name: 'Out', shape: 'square', color: '#aaaaaa' });
+    p.items.push(ball, star, out);
+    const m = { ...makeNode('machine', 0, 0), combine, inputs: [star.id, ball.id], outputs: [out.id] };
+    p.nodes.push(m);
+    ops.applyRecipes(p);
+    return { p, ball, star, out, m };
+  };
+
+  it('stacks B on top of A', () => {
+    const { out, m } = setup('stack');
+    expect(out.layers).toEqual([
+      { shape: 'star', color: '#fcf52a' },
+      { shape: 'circle', color: '#ff666a' },
+    ]);
+    expect(out.derivedFrom).toBe(m.id);
+  });
+
+  it("paints A's shape in B's colour", () => {
+    expect(setup('paint').out.layers).toEqual([{ shape: 'star', color: '#ff666a' }]);
+  });
+
+  it('mixes colours like light', () => {
+    expect(ops.mixColors(['#ff0000', '#00ff00'])).toBe('#ffff00');
+    expect(setup('mix').out.layers).toEqual([{ shape: 'star', color: '#fff56a' }]);
+  });
+
+  it('goes back to its own look when the machine stops combining', () => {
+    const { p, out } = setup('stack');
+    p.nodes[0].combine = 'own';
+    ops.applyRecipes(p);
+    expect(out.layers).toBeUndefined();
+    expect(out.derivedFrom).toBeUndefined();
+    expect(ops.lookOf(out)).toEqual([{ shape: 'square', color: '#aaaaaa' }]);
+  });
+
+  it('follows chains of combining machines', () => {
+    const { p, out, ball } = setup('stack');
+    const final = makeItem({ name: 'Final' });
+    p.items.push(final);
+    p.nodes.push({ ...makeNode('machine', 4, 0), combine: 'stack', inputs: [out.id, ball.id], outputs: [final.id] });
+    ops.applyRecipes(p);
+    expect(final.layers?.map((l) => l.shape)).toEqual(['star', 'circle', 'circle']);
+  });
+
+  it('survives a save and load, rebuilt from the machines', () => {
+    const { p } = setup('paint');
+    const again = normalizePipeline(JSON.parse(JSON.stringify(p)));
+    expect(again.nodes[0].combine).toBe('paint');
+    expect(again.items[2].layers).toEqual([{ shape: 'star', color: '#ff666a' }]);
+  });
+});

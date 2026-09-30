@@ -1,4 +1,4 @@
-import type { ItemShape } from '../model/types';
+import type { ItemLayer, ItemShape } from '../model/types';
 
 function polygon(sides: number, r: number, rotation = -Math.PI / 2): string {
   const pts: string[] = [];
@@ -47,12 +47,27 @@ export function ItemGlyph({ shape, color, r = 7, stroke = 'var(--ink)', strokeWi
   }
 }
 
+/** Each layer up the stack is drawn smaller, so every layer stays visible. */
+const LAYER_SCALE = [1, 0.62, 0.4, 0.26];
+
+/** An item look with any number of layers: the first at the bottom, the rest stacked on top. */
+export function LayeredGlyph({ layers, r = 7, strokeWidth = 1.6 }: { layers: ItemLayer[]; r?: number; strokeWidth?: number }) {
+  if (layers.length === 1) return <ItemGlyph shape={layers[0].shape} color={layers[0].color} r={r} strokeWidth={strokeWidth} />;
+  return (
+    <g>
+      {layers.slice(0, LAYER_SCALE.length).map((l, i) => (
+        <ItemGlyph key={i} shape={l.shape} color={l.color} r={r * LAYER_SCALE[i]} strokeWidth={Math.max(0.8, strokeWidth * (i ? 0.8 : 1))} />
+      ))}
+    </g>
+  );
+}
+
 /** Standalone inline SVG version for use in HTML (palette, inspector chips). */
-export function ItemIcon({ shape, color, size = 16 }: { shape: ItemShape; color: string; size?: number }) {
+export function ItemIcon({ shape, color, layers, size = 16 }: { shape: ItemShape; color: string; layers?: ItemLayer[]; size?: number }) {
   const r = size * 0.36;
   return (
     <svg className="item-icon" width={size} height={size} viewBox={`${-size / 2} ${-size / 2} ${size} ${size}`} aria-hidden>
-      <ItemGlyph shape={shape} color={color} r={r} strokeWidth={Math.max(1.2, size / 14)} />
+      <LayeredGlyph layers={layers?.length ? layers : [{ shape, color }]} r={r} strokeWidth={Math.max(1.2, size / 14)} />
     </svg>
   );
 }

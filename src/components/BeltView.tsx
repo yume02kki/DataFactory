@@ -3,7 +3,8 @@ import { CELL, DV, cellCenter, opposite, pathFromPoints, polylineLength, polylin
 import type { Link } from '../model/ops';
 import type { BeltTile, Dir, ItemType } from '../model/types';
 import { textWidth, truncate } from '../lib/text';
-import { ItemGlyph } from './ItemGlyph';
+import { LayeredGlyph } from './ItemGlyph';
+import { lookOf } from '../model/ops';
 
 /** World pixels per second that items travel along belts. */
 export const BELT_SPEED = 42;
@@ -100,7 +101,7 @@ export const LinkItems = memo(
                 path={geo.d}
                 calcMode="linear"
               />
-              {item ? <ItemGlyph shape={item.shape} color={item.color} r={7} /> : <circle className="blank-item" r={4} />}
+              {item ? <LayeredGlyph layers={lookOf(item)} r={7.5} /> : <circle className="blank-item" r={4} />}
             </g>
           ))}
         </g>
@@ -114,7 +115,7 @@ export const LinkItems = memo(
           <g className="belt-label" transform={`translate(${labelPos.x} ${labelPos.y})`}>
             <rect width={labelW} height={20} rx={10} />
             <g transform="translate(12 10)">
-              <ItemGlyph shape={item.shape} color={item.color} r={5} strokeWidth={1.3} />
+              <LayeredGlyph layers={lookOf(item)} r={5} strokeWidth={1.3} />
             </g>
             <text x={22} y={14} style={{ font: LABEL_FONT }}>
               {label}
