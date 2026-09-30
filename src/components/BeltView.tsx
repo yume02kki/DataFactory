@@ -12,7 +12,12 @@ const ITEM_SPACING = CELL * 1.25;
 const LABEL_FONT = '600 11px Inter, system-ui, sans-serif';
 const HALF = CELL / 2;
 
-/** Path of one tile: from the edge items arrive at, through the centre, out the far edge. */
+/** Chevrons per tile, and how long the belt takes to move one chevron along (in step with items). */
+const CHEVRONS_PER_TILE = 4;
+export const BELT_STEP_SECONDS = CELL / CHEVRONS_PER_TILE / BELT_SPEED;
+const CHEVRON = 'M -2.7 -3.9 L 2.9 0 L -2.7 3.9 Z';
+
+/** Path of one tile: from the edge items arrive at to the far edge; turns are true quarter circles. */
 export function tilePath(x: number, y: number, dir: Dir, inflow: Dir): string {
   const c = cellCenter(x, y);
   const [ix, iy] = DV[opposite(inflow)];
@@ -20,12 +25,54 @@ export function tilePath(x: number, y: number, dir: Dir, inflow: Dir): string {
   const entry = { x: c.x + ix * HALF, y: c.y + iy * HALF };
   const exit = { x: c.x + ox * HALF, y: c.y + oy * HALF };
   if (inflow === dir) return `M ${entry.x} ${entry.y} L ${exit.x} ${exit.y}`;
-  return `M ${entry.x} ${entry.y} Q ${c.x} ${c.y} ${exit.x} ${exit.y}`;
+  // Clockwise on screen when turning right relative to the direction of travel.
+  const [tx, ty] = DV[inflow];
+  const sweep = tx * oy - ty * ox > 0 ? 1 : 0;
+  return `M ${entry.x} ${entry.y} A ${HALF} ${HALF} 0 0 ${sweep} ${exit.x} ${exit.y}`;
 }
 
-function chevron(x: number, y: number, dir: Dir): string {
-  const c = cellCenter(x, y);
-  return `translate(${c.x} ${c.y}) rotate(${dir * 90})`;
+interface TileChevrons {
+  marks: Array<{ x: number; y: number; angle: number }>;
+  /** Straight tiles slide their chevrons one step along; curved ones turn them one step around the corner. */
+  style: React.CSSProperties;
+  turn: boolean;
+}
+
+/**
+ * Chevrons for one tile in the tile's own coordinates (0..CELL). One extra
+ * chevron sits just before the tile so that, as they all move one step, the
+ * tile is always evenly filled; anything outside the tile is clipped away.
+ */
+function tileChevrons(dir: Dir, inflow: Dir): TileChevrons {
+  const fracs = Array.from({ length: CHEVRONS_PER_TILE + 1 }, (_, k) => (k - 0.5) / CHEVRONS_PER_TILE);
+  const step = CELL / CHEVRONS_PER_TILE;
+  if (dir === inflow) {
+    const [dx, dy] = DV[dir];
+    const entry = { x: HALF - dx * HALF, y: HALF - dy * HALF };
+    return {
+      marks: fracs.map((f) => ({ x: entry.x + dx * CELL * f, y: entry.y + dy * CELL * f, angle: dir * 90 })),
+      style: { ['--mx' as string]: `${dx * step}px`, ['--my' as string]: `${dy * step}px` },
+      turn: false,
+    };
+  }
+  const [ix, iy] = DV[inflow];
+  const [ox, oy] = DV[dir];
+  const entry = { x: HALF - ix * HALF, y: HALF - iy * HALF };
+  const pivot = { x: entry.x + ox * HALF, y: entry.y + oy * HALF };
+  const a0 = Math.atan2(entry.y - pivot.y, entry.x - pivot.x);
+  const sweep = (ix * oy - iy * ox > 0 ? 1 : -1) * (Math.PI / 2);
+  return {
+    marks: fracs.map((f) => {
+      const a = a0 + sweep * f;
+      return {
+        x: pivot.x + Math.cos(a) * HALF,
+        y: pivot.y + Math.sin(a) * HALF,
+        angle: ((a + Math.sign(sweep) * (Math.PI / 2)) * 180) / Math.PI,
+      };
+    }),
+    style: { transformOrigin: `${pivot.x}px ${pivot.y}px`, ['--turn' as string]: `${(sweep * 180) / Math.PI / CHEVRONS_PER_TILE}deg` },
+    turn: true,
+  };
 }
 
 interface TileProps {
@@ -36,12 +83,18 @@ interface TileProps {
   dimmed?: Set<string>;
 }
 
-/** All belt tiles, drawn in passes (edges, surface, arrows) so neighbours join seamlessly. */
+/**
+ * All belt tiles, drawn in passes (outline, surface, chevrons) so neighbours
+ * join into one continuous band, in the style of shapez.io's conveyors.
+ */
 export const BeltTiles = memo(function BeltTiles({ tiles, inflow, className = '', selected, dimmed }: TileProps) {
-  const paths = tiles.map((t) => ({ t, d: tilePath(t.x, t.y, t.dir, inflow.get(t.id) ?? t.dir) }));
+  const paths = tiles.map((t) => {
+    const from = inflow.get(t.id) ?? t.dir;
+    return { t, from, d: tilePath(t.x, t.y, t.dir, from) };
+  });
   const cls = (t: BeltTile) => `${selected?.has(t.id) ? ' sel' : ''}${dimmed?.has(t.id) ? ' dim' : ''}`;
   return (
-    <g className={`belt-tiles ${className}`}>
+    <g className={`belt-tiles ${className}`} style={{ ['--belt-step' as string]: `${BELT_STEP_SECONDS}s` }}>
       {selected && selected.size > 0 && (
         <g className="belt-glow">
           {paths.filter(({ t }) => selected.has(t.id)).map(({ t, d }) => <path key={t.id} d={d} />)}
@@ -58,9 +111,18 @@ export const BeltTiles = memo(function BeltTiles({ tiles, inflow, className = ''
         ))}
       </g>
       <g className="belt-chevrons">
-        {paths.map(({ t }) => (
-          <path key={t.id} className={cls(t)} transform={chevron(t.x, t.y, t.dir)} d="M -3 -5.5 L 4 0 L -3 5.5 Z" />
-        ))}
+        {paths.map(({ t, from }) => {
+          const ch = tileChevrons(t.dir, from);
+          return (
+            <svg key={t.id} className={`chev-tile${cls(t)}`} x={t.x * CELL} y={t.y * CELL} width={CELL} height={CELL} overflow="hidden">
+              <g className={ch.turn ? 'chev-turn' : 'chev-move'} style={ch.style}>
+                {ch.marks.map((m, i) => (
+                  <path key={i} d={CHEVRON} transform={`translate(${m.x.toFixed(2)} ${m.y.toFixed(2)}) rotate(${m.angle.toFixed(1)})`} />
+                ))}
+              </g>
+            </svg>
+          );
+        })}
       </g>
     </g>
   );

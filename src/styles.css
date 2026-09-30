@@ -14,9 +14,9 @@
   --field: #f1f2f5;
   --field-border: #dcdfe5;
   --hover: #eceef2;
-  --belt: #d9dbe0;
-  --belt-edge: #b9bcc3;
-  --belt-chevron: #b4b8c0;
+  --belt: #d3d5da;
+  --belt-edge: #a9acb3;
+  --belt-chevron: #b6b9c0;
   --select: #4aa3df;
   --valid: #34a853;
   --invalid: #ef5072;
@@ -285,17 +285,49 @@ kbd {
 
 .belt-edge path {
   stroke: var(--belt-edge);
-  stroke-width: 24;
+  stroke-width: 24.5;
 }
 
 .belt-surface path {
   stroke: var(--belt);
-  stroke-width: 21;
+  stroke-width: 22;
 }
 
 .belt-chevrons path {
   fill: var(--belt-chevron);
   stroke: none;
+}
+
+/* Chevrons glide one step per cycle, in step with the items riding the belt. */
+.chev-move,
+.chev-turn {
+  transform-box: view-box;
+}
+
+.flowing .chev-move {
+  animation: chev-move var(--belt-step) linear infinite;
+}
+
+.flowing .chev-turn {
+  animation: chev-turn var(--belt-step) linear infinite;
+}
+
+@keyframes chev-move {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(var(--mx), var(--my));
+  }
+}
+
+@keyframes chev-turn {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(var(--turn));
+  }
 }
 
 .belt-glow path {
@@ -304,7 +336,8 @@ kbd {
   stroke-opacity: 0.45;
 }
 
-.belt-tiles .dim {
+.belt-tiles .dim,
+.chev-tile.dim {
   opacity: 0.35;
 }
 
