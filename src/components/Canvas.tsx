@@ -408,7 +408,15 @@ export function Canvas() {
   }, [paintPreview, ghost, occupancy]);
 
   const cellPx = CELL * view.zoom;
-  const showLabels = view.zoom >= 0.45;
+  // Belt labels only for the belt under the cursor or the selected one; the item shapes speak for themselves.
+  const labelledLinks = useMemo(() => {
+    const ids = new Set<string>();
+    const hoverTile = hover && !tool ? occupancy.get(cellKey(hover.x, hover.y))?.tile : undefined;
+    for (const l of links) {
+      if ((hoverTile && l.tiles.includes(hoverTile)) || (selection.belt && l.tiles.some((t) => t.id === selection.belt))) ids.add(l.id);
+    }
+    return ids;
+  }, [hover, tool, occupancy, links, selection.belt]);
 
   return (
     <div
@@ -444,7 +452,7 @@ export function Canvas() {
                 link={l}
                 item={l.itemId ? itemsById.get(l.itemId) ?? null : null}
                 dimmed={!!activeItem && l.itemId !== activeItem}
-                showLabel={showLabels}
+                showLabel={labelledLinks.has(l.id)}
               />
             ))}
           </g>

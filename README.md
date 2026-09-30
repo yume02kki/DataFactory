@@ -73,6 +73,7 @@ It plays like shapez.io: pick a tool, left-click to build, right-click to destro
 | Duplicate / delete | `Ctrl D` / `Del` |
 | Undo / redo | `Ctrl Z` / `Ctrl Shift Z` |
 | Pan / zoom | Drag the floor, `WASD`, `Space`+drag or the middle mouse button / scroll, `+` `−`, `F` to fit |
+| See what a belt carries | Hover the belt (or select it) to show its item label |
 | Highlight a flow | Hover an item in the palette to see every belt and building that handles it |
 | Pause the animation | `P` or **Pause flow** |
 
