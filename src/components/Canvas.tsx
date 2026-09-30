@@ -18,7 +18,7 @@ export const DND_MIME = 'application/x-datafactory';
 /** Exports with progress and error toasts. */
 export async function runExport(format: ExportFormat, region?: Rect, grid = false) {
   const { notify } = useFactory.getState();
-  notify(format === 'gif' ? 'Rendering GIF…' : 'Rendering PNG…');
+  notify(`Rendering ${format === 'mp4' ? 'video' : format.toUpperCase()}…`);
   try {
     await exportFactory(format, region, { grid });
     notify(`Exported ${format.toUpperCase()}`);

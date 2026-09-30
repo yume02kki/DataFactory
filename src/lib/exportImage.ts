@@ -1,9 +1,10 @@
 import { applyPalette, GIFEncoder, quantize } from 'gifenc';
+import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import { CELL, contentBounds, type Rect } from '../model/geometry';
 import { useFactory } from '../store/useFactory';
 import { CANVAS_ID } from './viewport';
 
-export type ExportFormat = 'png' | 'gif';
+export type ExportFormat = 'png' | 'gif' | 'mp4';
 
 /** Space around the whole factory so names under buildings aren't clipped. */
 const PAD = { x: CELL * 1.5, top: CELL, bottom: CELL * 2.25 };
@@ -13,6 +14,14 @@ const MAX_PNG_SIDE = 8000;
 const GIF_SCALE = 1.5;
 const MAX_GIF_SIDE = 2100;
 const GIF_TEXT_SCALE = 1.45;
+/** Videos are full colour, so they can be sharper; one loop is repeated to make a short clip. */
+const MP4_SCALE = 2;
+const MAX_MP4_SIDE = 2560;
+const MP4_TEXT_SCALE = 1.3;
+const MP4_FPS = 30;
+/** Frames in one seamless loop (the same motion the GIF shows in 20). */
+const MP4_LOOP_FRAMES = 36;
+const MP4_LOOPS = 5;
 const GIF_FRAMES = 20;
 const GIF_FRAME_MS = 60;
 /** The gear has 8 teeth, so turning it 1/8 per loop repeats seamlessly. */
@@ -191,7 +200,7 @@ function fitScale(region: Rect, preferred: number, maxSide: number) {
 export async function exportFactory(format: ExportFormat, region?: Rect, opts: { grid?: boolean } = {}): Promise<void> {
   if (!region && !factoryBounds()) throw new Error('Nothing to export yet');
   const css = collectCss();
-  const snap = snapshotWorld(format === 'gif' ? GIF_TEXT_SCALE : 1);
+  const snap = snapshotWorld(format === 'gif' ? GIF_TEXT_SCALE : format === 'mp4' ? MP4_TEXT_SCALE : 1);
   try {
     const area = region ?? snap.bounds();
     if (area.w < 4 || area.h < 4) throw new Error('Nothing to export yet');
@@ -202,6 +211,10 @@ export async function exportFactory(format: ExportFormat, region?: Rect, opts: {
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
       if (!blob) throw new Error('Could not create the PNG');
       download(blob, fileName('png'));
+      return;
+    }
+    if (format === 'mp4') {
+      await exportMp4(snap, area, css, !!opts.grid);
       return;
     }
     const scale = fitScale(area, GIF_SCALE, MAX_GIF_SIDE);
@@ -224,4 +237,70 @@ export async function exportFactory(format: ExportFormat, region?: Rect, opts: {
   } finally {
     snap.dispose();
   }
+}
+
+/** H.264 where the browser can encode it (plays everywhere), else VP9, both in an MP4 file. */
+async function pickCodec(width: number, height: number): Promise<{ config: VideoEncoderConfig; mux: 'avc' | 'vp9' } | null> {
+  const bitrate = Math.min(20_000_000, Math.round(width * height * MP4_FPS * 0.15));
+  const options: Array<{ codec: string; mux: 'avc' | 'vp9' }> = [
+    { codec: 'avc1.640033', mux: 'avc' },
+    { codec: 'avc1.4d0033', mux: 'avc' },
+    { codec: 'avc1.42003e', mux: 'avc' },
+    { codec: 'vp09.00.51.08', mux: 'vp9' },
+  ];
+  for (const o of options) {
+    const config: VideoEncoderConfig = { codec: o.codec, width, height, bitrate, framerate: MP4_FPS };
+    if (o.mux === 'avc') config.avc = { format: 'avc' };
+    try {
+      if ((await VideoEncoder.isConfigSupported(config)).supported) return { config, mux: o.mux };
+    } catch {
+      // Unknown codec string in this browser: try the next.
+    }
+  }
+  return null;
+}
+
+async function exportMp4(snap: ReturnType<typeof snapshotWorld>, area: Rect, css: string, grid: boolean) {
+  if (typeof VideoEncoder === 'undefined') throw new Error('This browser can’t record video; try Chrome, Edge or Safari');
+  const scale = fitScale(area, MP4_SCALE, MAX_MP4_SIDE);
+  // Video encoders want even sizes.
+  const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
+  const w = even(area.w * scale);
+  const h = even(area.h * scale);
+  const codec = await pickCodec(w, h);
+  if (!codec) throw new Error('This browser can’t encode MP4 video');
+
+  const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: codec.mux, width: w, height: h, frameRate: MP4_FPS }, fastStart: 'in-memory' });
+  let failure: unknown = null;
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    error: (e) => (failure = e),
+  });
+  encoder.configure(codec.config);
+
+  // Draw one loop, then play it several times over.
+  const loop: ImageBitmap[] = [];
+  try {
+    for (let f = 0; f < MP4_LOOP_FRAMES; f++) {
+      snap.pose(f / MP4_LOOP_FRAMES);
+      loop.push(await createImageBitmap(await rasterize(buildSvg(snap.clone, area, css, grid), w, h)));
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    const frameUs = 1_000_000 / MP4_FPS;
+    for (let i = 0; i < MP4_LOOP_FRAMES * MP4_LOOPS; i++) {
+      if (failure) throw failure;
+      const frame = new VideoFrame(loop[i % MP4_LOOP_FRAMES], { timestamp: Math.round(i * frameUs), duration: Math.round(frameUs) });
+      encoder.encode(frame, { keyFrame: i % MP4_LOOP_FRAMES === 0 });
+      frame.close();
+      // Don't let the encoder queue grow without bound.
+      while (encoder.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 5));
+    }
+    await encoder.flush();
+    if (failure) throw failure;
+  } finally {
+    loop.forEach((b) => b.close());
+    if (encoder.state !== 'closed') encoder.close();
+  }
+  muxer.finalize();
+  download(new Blob([muxer.target.buffer], { type: 'video/mp4' }), fileName('mp4'));
 }

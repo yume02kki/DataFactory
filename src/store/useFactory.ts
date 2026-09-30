@@ -1,3 +1,4 @@
+import type { ExportFormat } from '../lib/exportImage';
 import { produce } from 'immer';
 import { create } from 'zustand';
 import { KIND_META, SWATCHES, makeItem, makeNode } from '../model/defaults';
@@ -33,7 +34,7 @@ export interface FactoryState {
   /** The last copied or cut selection. */
   clipboard: ops.Clip | null;
   /** Set while the user drags a box to choose what to export. */
-  exportArea: { format: 'png' | 'gif'; grid: boolean } | null;
+  exportArea: { format: ExportFormat; grid: boolean } | null;
 
   loadPipeline: (p: Pipeline) => void;
   /** Applies a change to the pipeline. Edits sharing a `coalesce` key within a short window form one undo step. */

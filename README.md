@@ -137,9 +137,13 @@ the buildings stay where they are.
 
 ## Exporting images
 
-**Export ▾** in the top bar saves the factory as a **PNG** (rendered at 2×) or an
-animated **GIF** of items moving along the belts, which loops without a jump.
-Either can cover the **whole factory** or a **selected area**: pick *Select an
+**Export ▾** in the top bar saves the factory as a **PNG** (rendered at 2×), an
+animated **GIF** of items moving along the belts, which loops without a jump,
+or a 6-second **MP4** video of the same motion in full colour and at up to
+2560 px. GIFs and videos draw labels larger so they stay readable. MP4s use
+H.264 where the browser can encode it (Chrome, Edge, Safari) and VP9 otherwise
+(e.g. Firefox), which plays in browsers and VLC but not in older QuickTime.
+Any of them can cover the **whole factory** or a **selected area**: pick *Select an
 area…* and drag a box over the floor (`Esc` or right-click cancels). Tick
 *Include the grid* to keep the floor grid in the image. Exports use the current
 light or dark theme and leave out selection and hover highlights.

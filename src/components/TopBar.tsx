@@ -245,6 +245,14 @@ function ExportMenu({ onClose }: { onClose: () => void }) {
         <span>⬚</span> Select an area…
       </button>
       <div className="menu-sep" />
+      <div className="menu-label">Video (MP4)</div>
+      <button className="menu-item" onClick={() => whole('mp4')}>
+        <span>▣</span> Whole factory
+      </button>
+      <button className="menu-item" onClick={() => area('mp4')}>
+        <span>⬚</span> Select an area…
+      </button>
+      <div className="menu-sep" />
       <label className="menu-check">
         <input type="checkbox" checked={grid} onChange={(e) => setGrid(e.target.checked)} /> Include the grid
       </label>
