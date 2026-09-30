@@ -4,6 +4,8 @@
 # Everything sits in main(), so bash has read the whole file before a pull
 # can replace it.
 set -euo pipefail
+# runuser and friends live in sbin, which a minimal service PATH can miss.
+export PATH="$PATH:/usr/local/sbin:/usr/sbin:/sbin"
 
 main() {
   local app_dir="${APP_DIR:?APP_DIR not set}"

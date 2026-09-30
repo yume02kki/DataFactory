@@ -56,7 +56,7 @@ Wants=network-online.target
 [Service]
 User=$RUN_USER
 WorkingDirectory=$APP_DIR
-Environment=PATH=$(dirname "$NPM"):/usr/local/bin:/usr/bin:/bin
+Environment=PATH=$(dirname "$NPM"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=$NPM run dev -- --host 0.0.0.0 --port $PORT --strictPort
 # Lets the app use a port below 1024 (e.g. PORT=80) without running as root.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
@@ -76,7 +76,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 Environment=APP_DIR=$APP_DIR BRANCH=$BRANCH RUN_USER=$RUN_USER
-Environment=PATH=$(dirname "$NPM"):/usr/local/bin:/usr/bin:/bin
+Environment=PATH=$(dirname "$NPM"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=$APP_DIR/deploy/sync.sh
 UNIT
 
