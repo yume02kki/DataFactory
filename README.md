@@ -104,7 +104,8 @@ It plays like shapez.io: pick a tool, left-click to build, right-click to destro
 | Put the tool away | Right-click empty floor, or `Esc` |
 | Pipette | `Q` or a middle click picks up the building (with all its settings) or belt under the cursor as the tool; middle-drag still pans |
 | Choose what a belt carries | Drag an item from the palette onto the belt, or click the belt and pick it in the inspector |
-| Select / move | With no tool, click a building and drag it. `Shift`+drag a box to select buildings and belts together, then drag or nudge them with the arrow keys |
+| Select / move | With no tool, click a building and drag it. `Shift`+drag or `Ctrl`+drag a box to select buildings and belts together, then drag any selected piece to move them all, or nudge them with the arrow keys |
+| Copy / cut / paste | `Ctrl C` / `Ctrl X`, then `Ctrl V` picks the copy up as a ghost: `R` rotates it, left-click places it (click again for more copies), right-click or `Esc` puts it away. Red cells show what's in the way. Works across factories |
 | Duplicate / delete | `Ctrl D` / `Del` |
 | Undo / redo | `Ctrl Z` / `Ctrl Shift Z` |
 | Pan / zoom | Drag the floor, `WASD`, `Space`+drag or the middle mouse button / scroll, `+` `−`, `F` to fit |
