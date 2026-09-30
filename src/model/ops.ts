@@ -5,6 +5,7 @@ import {
   cellCenter,
   cellKey,
   connectedGroups,
+  inputCells,
   nodeCells,
   nodeRect,
   normalizeOffsets,
@@ -562,4 +563,39 @@ export function applyRecipes(p: Pipeline) {
       delete item.derivedFrom;
     }
   }
+}
+
+/* ---------- which ports are in use ---------- */
+
+export const portKey = (side: Dir, cell: Pt) => `${side}:${cell.x},${cell.y}`;
+
+/**
+ * For each building, the port faces something is attached to (keyed by
+ * portKey(side, outside cell)): an output face with a belt leaving it or a
+ * building taking items straight from it, and an input face with a belt
+ * pointing in or a building feeding it directly.
+ */
+export function connectedPorts(p: Pipeline): Map<string, Set<string>> {
+  const occ = occupancy(p);
+  const out = new Map<string, Set<string>>();
+  for (const n of p.nodes) {
+    const used = new Set<string>();
+    const back = opposite(n.rotation);
+    if (KIND_META[n.kind].hasOutput) {
+      for (const c of outputCells(n)) {
+        const o = occ.get(cellKey(c.x, c.y));
+        const takes = o?.node && o.node.id !== n.id && KIND_META[o.node.kind].hasInput && o.node.rotation === n.rotation;
+        if ((o?.tile && o.tile.dir !== back) || takes) used.add(portKey(n.rotation, c));
+      }
+    }
+    if (KIND_META[n.kind].hasInput) {
+      for (const c of inputCells(n)) {
+        const o = occ.get(cellKey(c.x, c.y));
+        const feeds = o?.node && o.node.id !== n.id && KIND_META[o.node.kind].hasOutput && o.node.rotation === n.rotation;
+        if ((o?.tile && o.tile.dir === n.rotation) || feeds) used.add(portKey(back, c));
+      }
+    }
+    out.set(n.id, used);
+  }
+  return out;
 }

@@ -490,3 +490,26 @@ describe('dragging belts like shapez', () => {
     expect(p.nodes.find((n) => n.id === mac.id)).toBeDefined();
   });
 });
+
+describe('ports in use', () => {
+  it('only counts faces with a belt or a building attached', () => {
+    const { p, src, mac, sto } = tinyFactory(); // source(0) machine(4) store(8) on row 0
+    expect(ops.connectedPorts(p).get(mac.id)?.size).toBe(0);
+    ops.paintBelt(p, [1, 2, 3].map((x) => ({ x, y: 0, dir: 0 as Dir })));
+    const used = ops.connectedPorts(p);
+    expect([...used.get(src.id)!]).toEqual(['0:1,0']); // output face, belt leaving
+    expect([...used.get(mac.id)!]).toEqual(['2:3,0']); // input face, belt pointing in
+    expect(used.get(sto.id)?.size).toBe(0);
+    // A belt pointing the wrong way doesn't count as feeding the machine.
+    ops.paintBelt(p, [{ x: 3, y: 0, dir: 1 }]);
+    expect(ops.connectedPorts(p).get(mac.id)?.size).toBe(0);
+  });
+
+  it('counts buildings handing items over directly', () => {
+    const { p, src, mac } = tinyFactory();
+    src.x = 3; // right behind the machine
+    const used = ops.connectedPorts(p);
+    expect(used.get(src.id)?.size).toBe(1);
+    expect(used.get(mac.id)?.size).toBe(1);
+  });
+});

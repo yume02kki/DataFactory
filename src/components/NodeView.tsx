@@ -13,9 +13,12 @@ interface Props {
   items: ItemType[];
   selected: boolean;
   dimmed: boolean;
+  /** Ports in use; unused port tabs are hidden unless `allPorts`. */
+  usedPorts?: Set<string>;
+  allPorts?: boolean;
 }
 
-export const NodeView = memo(function NodeView({ node, items, selected, dimmed }: Props) {
+export const NodeView = memo(function NodeView({ node, items, selected, dimmed, usedPorts, allPorts }: Props) {
   const r = nodeRect(node);
   const cells = useMemo(() => nodeCells(node), [node]);
   const meta = KIND_META[node.kind];
@@ -34,7 +37,7 @@ export const NodeView = memo(function NodeView({ node, items, selected, dimmed }
   return (
     <g className={`node node-${node.kind}${selected ? ' selected' : ''}${dimmed ? ' dimmed' : ''}`} data-node-id={node.id}>
       {selected && <path className="select-ring" d={outlinePath(cells, -3, 9)} fillRule="evenodd" />}
-      <BuildingArt kind={node.kind} cells={cells} rotation={node.rotation} color={node.color} queue={queue} icon={node.icon} />
+      <BuildingArt kind={node.kind} cells={cells} rotation={node.rotation} color={node.color} queue={queue} icon={node.icon} usedPorts={allPorts || selected ? undefined : usedPorts} />
       <g className="labels" transform={`translate(${r.x + r.w / 2} ${r.y + r.h + 15})`}>
         <text className="node-name" x={0} y={0} textAnchor="middle" style={{ font: NAME_FONT }}>
           {name}

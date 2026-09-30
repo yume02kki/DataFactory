@@ -468,6 +468,8 @@ export function Canvas() {
 
   const occupancy = useMemo(() => ops.occupancy(pipeline), [pipeline]);
   const links = useMemo(() => ops.traceLinks(pipeline), [pipeline]);
+  // Unused port tabs are hidden, except on the selected building and while laying belts.
+  const usedPorts = useMemo(() => ops.connectedPorts(pipeline), [pipeline]);
   const inflow = useMemo(() => ops.tileInflow(pipeline), [pipeline]);
   const itemsById = useMemo(() => new Map(pipeline.items.map((i) => [i.id, i])), [pipeline.items]);
   const activeItem = highlightItem ?? selection.item;
@@ -575,6 +577,8 @@ export function Canvas() {
                 items={pipeline.items}
                 selected={selection.nodes.includes(n.id)}
                 dimmed={!!activeItem && !n.inputs.includes(activeItem) && !n.outputs.includes(activeItem)}
+                usedPorts={usedPorts.get(n.id)}
+                allPorts={tool?.type === 'belt'}
               />
             ))}
           </g>

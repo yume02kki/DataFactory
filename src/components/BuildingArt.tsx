@@ -5,7 +5,7 @@ import { KIND_META } from '../model/defaults';
 import { CELL, DV, cellCenter, inputCells, opposite, outlinePath, outputCells, type Pt } from '../model/geometry';
 import type { Dir, ItemType, NodeKind } from '../model/types';
 import { LayeredGlyph } from './ItemGlyph';
-import { lookOf } from '../model/ops';
+import { lookOf, portKey } from '../model/ops';
 
 function gearPath(outer: number, inner: number, teeth: number): string {
   const step = (Math.PI * 2) / teeth;
@@ -70,6 +70,8 @@ interface Props {
   /** Items shown queued inside a buffer. */
   queue?: ItemType[];
   ports?: boolean;
+  /** When given, only these ports (see portKey) get a tab; otherwise every port does. */
+  usedPorts?: Set<string>;
   /** Icon from the icon set, shown instead of the kind's symbol. */
   icon?: string;
 }
@@ -100,7 +102,7 @@ function symbolPoint(cells: Pt[]): Pt {
  * plate, so any shape reads as a single building. Every exposed back face gets
  * an input tab and every exposed front face an output tab; the symbol stays upright.
  */
-export const BuildingArt = memo(function BuildingArt({ kind, cells, rotation = 0, color, queue = [], ports = true, icon }: Props) {
+export const BuildingArt = memo(function BuildingArt({ kind, cells, rotation = 0, color, queue = [], ports = true, usedPorts, icon }: Props) {
   const meta = KIND_META[kind];
   const node = { x: 0, y: 0, cells: cells.map((c) => [c.x, c.y] as [number, number]), rotation };
   const [fx, fy] = DV[rotation];
@@ -118,8 +120,8 @@ export const BuildingArt = memo(function BuildingArt({ kind, cells, rotation = 0
 
   return (
     <g className={`art art-${kind}`}>
-      {ports && meta.hasInput && inputCells(node).map((c) => tab(c, back, 1.5))}
-      {ports && meta.hasOutput && outputCells(node).map((c) => tab(c, rotation, -1.5))}
+      {ports && meta.hasInput && inputCells(node).filter((c) => !usedPorts || usedPorts.has(portKey(back, c))).map((c) => tab(c, back, 1.5))}
+      {ports && meta.hasOutput && outputCells(node).filter((c) => !usedPorts || usedPorts.has(portKey(rotation, c))).map((c) => tab(c, rotation, -1.5))}
       {tank ? (
         <Tank kind={kind} cells={cells} color={color} queue={queue} icon={icon} />
       ) : (
