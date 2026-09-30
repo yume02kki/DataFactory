@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { ITEM_SHAPES, KIND_META, SWATCHES } from '../model/defaults';
 import { uid } from '../model/ids';
 import * as ops from '../model/ops';
-import type { Belt, FactoryNode, ItemType, Pipeline } from '../model/types';
+import type { FactoryNode, ItemType, Pipeline } from '../model/types';
+import { BeltIcon } from './Hotbar';
 import { useFactory } from '../store/useFactory';
 import { ItemIcon } from './ItemGlyph';
 import { KindIcon } from './KindIcon';
@@ -13,18 +14,22 @@ export function Inspector() {
   const selection = useFactory((s) => s.selection);
   const pipeline = useFactory((s) => s.pipeline);
 
+  const links = useMemo(() => ops.traceLinks(pipeline), [pipeline]);
+
   let body: React.ReactNode = null;
-  if (selection.nodes.length === 1) {
+  const count = selection.nodes.length + selection.tiles.length;
+  if (selection.nodes.length === 1 && selection.tiles.length === 0) {
     const node = pipeline.nodes.find((n) => n.id === selection.nodes[0]);
-    if (node) body = <NodeInspector key={node.id} node={node} pipeline={pipeline} />;
-  } else if (selection.nodes.length > 1) {
-    body = <MultiInspector ids={selection.nodes} pipeline={pipeline} />;
+    if (node) body = <NodeInspector key={node.id} node={node} pipeline={pipeline} links={links} />;
+  } else if (count > 0) {
+    body = <MultiInspector nodeIds={selection.nodes} tileIds={selection.tiles} pipeline={pipeline} />;
   } else if (selection.belt) {
-    const belt = pipeline.belts.find((b) => b.id === selection.belt);
-    if (belt) body = <BeltInspector key={belt.id} belt={belt} pipeline={pipeline} />;
+    const tile = pipeline.belts.find((t) => t.id === selection.belt);
+    const link = links.find((l) => l.tiles.some((t) => t.id === selection.belt));
+    if (tile) body = <BeltInspector key={link?.id ?? tile.id} tileId={tile.id} link={link} pipeline={pipeline} />;
   } else if (selection.item) {
     const item = pipeline.items.find((i) => i.id === selection.item);
-    if (item) body = <ItemInspector key={item.id} item={item} pipeline={pipeline} />;
+    if (item) body = <ItemInspector key={item.id} item={item} pipeline={pipeline} links={links} />;
   }
   if (!body) return null;
   return (
@@ -161,7 +166,7 @@ function technologies(p: Pipeline): string[] {
 
 /* ---------- node ---------- */
 
-function NodeInspector({ node, pipeline }: { node: FactoryNode; pipeline: Pipeline }) {
+function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline: Pipeline; links: ops.Link[] }) {
   const meta = KIND_META[node.kind];
   const itemsById = useMemo(() => new Map(pipeline.items.map((i) => [i.id, i])), [pipeline.items]);
   const techs = useMemo(() => technologies(pipeline), [pipeline]);
@@ -174,8 +179,8 @@ function NodeInspector({ node, pipeline }: { node: FactoryNode; pipeline: Pipeli
       },
       { coalesce: `${node.id}:${String(key)}` },
     );
-  const incoming = pipeline.belts.filter((b) => b.to === node.id);
-  const outgoing = pipeline.belts.filter((b) => b.from === node.id);
+  const incoming = links.filter((l) => l.to === node.id);
+  const outgoing = links.filter((l) => l.from === node.id);
   const nameOf = (id: string) => pipeline.nodes.find((n) => n.id === id)?.name ?? '?';
 
   const listEditor = (list: 'inputs' | 'outputs') => (
@@ -222,6 +227,19 @@ function NodeInspector({ node, pipeline }: { node: FactoryNode; pipeline: Pipeli
       <Field label="Colour">
         <Swatches value={node.color} first={meta.color} onChange={(c) => set('color', c)} />
       </Field>
+      <Field label="Facing" hint="R / Shift R">
+        <div className="rotate-row">
+          <button className="btn" onClick={() => useFactory.getState().rotate(-1)} aria-label="Rotate left">
+            ⟲
+          </button>
+          <span className="facing">
+            <span style={{ display: 'inline-block', transform: `rotate(${node.rotation * 90}deg)` }}>➜</span> {['right', 'down', 'left', 'up'][node.rotation]}
+          </span>
+          <button className="btn" onClick={() => useFactory.getState().rotate(1)} aria-label="Rotate right">
+            ⟳
+          </button>
+        </div>
+      </Field>
 
       {meta.hasInput && <Section title="Inputs">{listEditor('inputs')}</Section>}
       {meta.hasOutput && <Section title="Outputs">{listEditor('outputs')}</Section>}
@@ -267,11 +285,11 @@ function NodeInspector({ node, pipeline }: { node: FactoryNode; pipeline: Pipeli
       {(incoming.length > 0 || outgoing.length > 0) && (
         <Section title="Connections">
           <div className="conn-list">
-            {incoming.map((b) => (
-              <ConnRow key={b.id} belt={b} dir="in" other={nameOf(b.from)} item={b.itemId ? itemsById.get(b.itemId) : undefined} />
+            {incoming.map((l) => (
+              <ConnRow key={l.id} tileId={l.id} dir="in" other={nameOf(l.from)} item={l.itemId ? itemsById.get(l.itemId) : undefined} />
             ))}
-            {outgoing.map((b) => (
-              <ConnRow key={b.id} belt={b} dir="out" other={nameOf(b.to)} item={b.itemId ? itemsById.get(b.itemId) : undefined} />
+            {outgoing.map((l) => (
+              <ConnRow key={l.id} tileId={l.id} dir="out" other={l.to ? nameOf(l.to) : 'nowhere (open end)'} item={l.itemId ? itemsById.get(l.itemId) : undefined} />
             ))}
           </div>
         </Section>
@@ -289,9 +307,9 @@ function NodeInspector({ node, pipeline }: { node: FactoryNode; pipeline: Pipeli
   );
 }
 
-function ConnRow({ belt, dir, other, item }: { belt: Belt; dir: 'in' | 'out'; other: string; item?: ItemType }) {
+function ConnRow({ tileId, dir, other, item }: { tileId: string; dir: 'in' | 'out'; other: string; item?: ItemType }) {
   return (
-    <button className="conn-row" onClick={() => useFactory.getState().select({ belt: belt.id })}>
+    <button className="conn-row" onClick={() => useFactory.getState().select({ belt: tileId })}>
       <span className="conn-dir">{dir === 'in' ? '←' : '→'}</span>
       <span className="conn-name">{other}</span>
       {item ? <ItemIcon shape={item.shape} color={item.color} size={14} /> : <span className="muted small">nothing</span>}
@@ -301,12 +319,11 @@ function ConnRow({ belt, dir, other, item }: { belt: Belt; dir: 'in' | 'out'; ot
 
 /* ---------- multi ---------- */
 
-function MultiInspector({ ids, pipeline }: { ids: string[]; pipeline: Pipeline }) {
-  const nodes = pipeline.nodes.filter((n) => ids.includes(n.id));
-  const internal = pipeline.belts.filter((b) => ids.includes(b.from) && ids.includes(b.to)).length;
+function MultiInspector({ nodeIds, tileIds, pipeline }: { nodeIds: string[]; tileIds: string[]; pipeline: Pipeline }) {
+  const nodes = pipeline.nodes.filter((n) => nodeIds.includes(n.id));
   return (
     <div className="insp-body">
-      <Header icon={<KindIcon kind="machine" color="#8a94a6" size={40} />} eyebrow="Selection" title={`${nodes.length} buildings`} />
+      <Header icon={<KindIcon kind="machine" color="#aaaaaa" size={40} />} eyebrow="Selection" title={`${nodes.length} buildings · ${tileIds.length} belt tiles`} />
       <div className="kind-counts">
         {(['source', 'machine', 'buffer', 'store'] as const).map((k) => {
           const count = nodes.filter((n) => n.kind === k).length;
@@ -317,9 +334,7 @@ function MultiInspector({ ids, pipeline }: { ids: string[]; pipeline: Pipeline }
           ) : null;
         })}
       </div>
-      <p className="muted small">
-        {internal} belt{internal === 1 ? '' : 's'} between them. Drag any selected building to move the group; duplicating keeps their belts.
-      </p>
+      <p className="muted small">Drag any selected building or belt to move the whole group. R rotates the selected buildings; duplicating copies belts too.</p>
       <div className="insp-actions">
         <button className="btn" onClick={() => useFactory.getState().duplicateSelection()}>
           Duplicate <kbd>Ctrl D</kbd>
@@ -334,45 +349,55 @@ function MultiInspector({ ids, pipeline }: { ids: string[]; pipeline: Pipeline }
 
 /* ---------- belt ---------- */
 
-function BeltInspector({ belt, pipeline }: { belt: Belt; pipeline: Pipeline }) {
-  const from = pipeline.nodes.find((n) => n.id === belt.from);
-  const to = pipeline.nodes.find((n) => n.id === belt.to);
-  const item = pipeline.items.find((i) => i.id === belt.itemId);
-  if (!from || !to) return null;
-  const setItem = (id: string | null) => edit((p) => ops.setBeltItem(p, belt.id, id));
-  const suggested = [...new Set([...from.outputs, ...to.inputs])];
+function BeltInspector({ tileId, link, pipeline }: { tileId: string; link?: ops.Link; pipeline: Pipeline }) {
+  const from = link && pipeline.nodes.find((n) => n.id === link.from);
+  const to = link?.to ? pipeline.nodes.find((n) => n.id === link.to) : undefined;
+  const item = link?.itemId ? pipeline.items.find((i) => i.id === link.itemId) : undefined;
+  const first = pipeline.belts.find((t) => t.id === (link?.id ?? tileId));
+  const setItem = (id: string | null) => edit((p) => ops.setLinkItem(p, tileId, id));
+  const suggested = [...new Set([...(from?.outputs ?? []), ...(to?.inputs ?? [])])];
+
+  if (!link || !from) {
+    return (
+      <div className="insp-body">
+        <Header icon={<BeltIcon size={36} />} eyebrow="Belt" title="Loose belt" />
+        <p className="muted small">No building feeds this belt yet. Lay it so it starts at a building's output side (the tabs with outward arrows).</p>
+        <div className="insp-actions">
+          <button className="btn danger" onClick={() => useFactory.getState().deleteSelection()}>
+            Remove tile <kbd>Del</kbd>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="insp-body">
-      <Header
-        icon={
-          <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden>
-            <rect x="2" y="13" width="36" height="14" rx="4" fill="var(--belt)" stroke="var(--ink)" strokeWidth="2" />
-            <path d="M 12 16 L 17 20 L 12 24 M 22 16 L 27 20 L 22 24" stroke="var(--belt-tread)" strokeWidth="2" fill="none" />
-          </svg>
-        }
-        eyebrow="Belt"
-        title={item ? `${item.name} belt` : 'Empty belt'}
-      />
+      <Header icon={<BeltIcon size={36} />} eyebrow={`Belt · ${link.tiles.length} tiles`} title={item ? `${item.name} belt` : 'Empty belt'} />
       <div className="belt-route">
         <button className="route-end" onClick={() => useFactory.getState().selectNodes([from.id])}>
           <KindIcon kind={from.kind} color={from.color} size={24} />
           <span>{from.name}</span>
         </button>
         <span className="route-arrow">→</span>
-        <button className="route-end" onClick={() => useFactory.getState().selectNodes([to.id])}>
-          <KindIcon kind={to.kind} color={to.color} size={24} />
-          <span>{to.name}</span>
-        </button>
+        {to ? (
+          <button className="route-end" onClick={() => useFactory.getState().selectNodes([to.id])}>
+            <KindIcon kind={to.kind} color={to.color} size={24} />
+            <span>{to.name}</span>
+          </button>
+        ) : (
+          <span className="route-end open-end">Open end</span>
+        )}
       </div>
+      {!to && <p className="muted small">This belt doesn't reach a building's input side yet, so items fall off the end.</p>}
 
       <Section title="Carries">
         <div className="chip-row">
           {pipeline.items.map((i) => (
             <button
               key={i.id}
-              className={`item-chip small selectable${belt.itemId === i.id ? ' active' : ''}${suggested.includes(i.id) ? '' : ' faint'}`}
-              onClick={() => setItem(belt.itemId === i.id ? null : i.id)}
+              className={`item-chip small selectable${link.itemId === i.id ? ' active' : ''}${suggested.includes(i.id) ? '' : ' faint'}`}
+              onClick={() => setItem(link.explicit && link.itemId === i.id ? null : i.id)}
             >
               <ItemIcon shape={i.shape} color={i.color} size={14} />
               <span>{i.name}</span>
@@ -380,19 +405,22 @@ function BeltInspector({ belt, pipeline }: { belt: Belt; pipeline: Pipeline }) {
           ))}
           <ItemPicker exclude={pipeline.items.map((i) => i.id)} items={pipeline.items} onPick={setItem} label="+ New item" />
         </div>
-        <p className="muted small">Picking an item adds it to the outputs of “{from.name}” and the inputs of “{to.name}”.</p>
+        <p className="muted small">
+          {link.explicit ? 'Chosen by you. ' : link.itemId ? `Guessed from “${from.name}”. ` : ''}
+          Picking an item adds it to the outputs of “{from.name}”{to ? ` and the inputs of “${to.name}”` : ''}.
+        </p>
       </Section>
 
       <Field label="Notes">
         <textarea
           rows={2}
-          value={belt.description}
+          value={first?.description ?? ''}
           placeholder="e.g. pushed over HTTP, hourly batch, CDC…"
           onChange={(e) =>
             edit((p) => {
-              const b = p.belts.find((x) => x.id === belt.id);
-              if (b) b.description = e.target.value;
-            }, { coalesce: `${belt.id}:desc` })
+              const t = p.belts.find((x) => x.id === link.id);
+              if (t) t.description = e.target.value;
+            }, { coalesce: `${link.id}:desc` })
           }
         />
       </Field>
@@ -408,7 +436,7 @@ function BeltInspector({ belt, pipeline }: { belt: Belt; pipeline: Pipeline }) {
 
 /* ---------- item ---------- */
 
-function ItemInspector({ item, pipeline }: { item: ItemType; pipeline: Pipeline }) {
+function ItemInspector({ item, pipeline, links }: { item: ItemType; pipeline: Pipeline; links: ops.Link[] }) {
   const set = <K extends keyof ItemType>(key: K, value: ItemType[K]) =>
     edit(
       (p) => {
@@ -419,7 +447,7 @@ function ItemInspector({ item, pipeline }: { item: ItemType; pipeline: Pipeline 
     );
   const producers = pipeline.nodes.filter((n) => n.outputs.includes(item.id));
   const consumers = pipeline.nodes.filter((n) => n.inputs.includes(item.id));
-  const belts = pipeline.belts.filter((b) => b.itemId === item.id).length;
+  const belts = links.filter((l) => l.itemId === item.id).length;
 
   const setField = (fid: string, key: 'name' | 'type', value: string) =>
     edit((p) => {

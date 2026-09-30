@@ -8,7 +8,15 @@ import { TopBar, openPipeline, saveNow } from './components/TopBar';
 import { KIND_META, NODE_KINDS, examplePipeline } from './model/defaults';
 import * as storage from './model/storage';
 import { useFactory } from './store/useFactory';
-import { fitToView, placementCell, zoomBy } from './lib/viewport';
+import { fitToView, pointer, zoomBy } from './lib/viewport';
+import { BELT_HOTKEY, Hotbar } from './components/Hotbar';
+import { CELL, cellKey } from './model/geometry';
+import * as ops from './model/ops';
+
+function hoverCell() {
+  const w = pointer.world;
+  return w ? { x: Math.floor(w.x / CELL), y: Math.floor(w.y / CELL) } : null;
+}
 
 function bootstrap() {
   const id = storage.getCurrentId();
@@ -79,12 +87,13 @@ export default function App() {
         s.notify(saveNow() ? 'Saved in this browser' : 'Could not save (storage unavailable)');
       } else if (mod && key === 'a') {
         e.preventDefault();
-        s.selectNodes(s.pipeline.nodes.map((n) => n.id));
+        s.select({ nodes: s.pipeline.nodes.map((n) => n.id), tiles: s.pipeline.belts.map((t) => t.id) });
       } else if (key === 'delete' || key === 'backspace') {
         e.preventDefault();
         s.deleteSelection();
       } else if (key === 'escape') {
-        s.clearSelection();
+        if (s.tool) s.setTool(null);
+        else s.clearSelection();
         setHelp(false);
       } else if (mod) {
         return;
@@ -98,25 +107,58 @@ export default function App() {
         zoomBy(1 / 1.2);
       } else if (key === '?') {
         setHelp((h) => !h);
-      } else if (key.startsWith('arrow') && s.selection.nodes.length) {
+      } else if (key.startsWith('arrow') && (s.selection.nodes.length || s.selection.tiles.length)) {
         e.preventDefault();
         const step = e.shiftKey ? 4 : 1;
         const dx = key === 'arrowleft' ? -step : key === 'arrowright' ? step : 0;
         const dy = key === 'arrowup' ? -step : key === 'arrowdown' ? step : 0;
-        const ids = new Set(s.selection.nodes);
+        const { nodes, tiles } = s.selection;
+        if (!ops.canMove(s.pipeline, nodes, tiles, dx, dy)) return;
         s.edit(
           (p) => {
             for (const n of p.nodes)
-              if (ids.has(n.id)) {
+              if (nodes.includes(n.id)) {
                 n.x += dx;
                 n.y += dy;
+              }
+            for (const t of p.belts)
+              if (tiles.includes(t.id)) {
+                t.x += dx;
+                t.y += dy;
               }
           },
           { coalesce: 'nudge' },
         );
+      } else if (key === 'r') {
+        s.rotate(e.shiftKey ? -1 : 1, hoverCell());
+      } else if (key === 'q') {
+        // Pipette: pick up whatever is under the cursor as the build tool.
+        const cell = hoverCell();
+        const occ = cell ? ops.occupancy(s.pipeline).get(cellKey(cell.x, cell.y)) : undefined;
+        if (occ?.node) {
+          const { name, type, technology, description, color, inputs, outputs, metadata } = occ.node;
+          s.setTool({ type: 'building', kind: occ.node.kind, blueprintId: null, template: { name, type, technology, description, color, inputs, outputs, metadata } });
+          useFactory.setState({ rotation: occ.node.rotation });
+        } else if (occ?.tile) {
+          s.setTool({ type: 'belt' });
+          useFactory.setState({ rotation: occ.tile.dir });
+        } else {
+          s.setTool(null);
+        }
+      } else if (['w', 'a', 's', 'd'].includes(key)) {
+        const step = e.shiftKey ? 160 : 60;
+        const dx = key === 'a' ? step : key === 'd' ? -step : 0;
+        const dy = key === 'w' ? step : key === 's' ? -step : 0;
+        s.setView({ ...s.view, x: s.view.x + dx, y: s.view.y + dy });
+      } else if (key === BELT_HOTKEY) {
+        s.setTool(s.tool?.type === 'belt' ? null : { type: 'belt' });
       } else {
         const kind = NODE_KINDS.find((k) => KIND_META[k].hotkey === key);
-        if (kind) s.addNode(kind, placementCell(kind, true));
+        if (kind) {
+          const t = s.tool;
+          const same = t?.type === 'building' && t.kind === kind && !t.blueprintId && !t.template;
+          s.setTool(same ? null : { type: 'building', kind, blueprintId: null });
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -130,9 +172,7 @@ export default function App() {
       <TopBar saved={saved} onHelp={() => setHelp(true)} />
       <Inspector />
       {empty && <EmptyState />}
-      <div className="hintbar">
-        Drag from the palette · Drag a <b>▶</b> port onto a building to lay a belt · Double-click the floor to build · Drag the floor to pan · Scroll to zoom
-      </div>
+      <Hotbar />
       {toast && (
         <div className="toast" key={toast.id} role="status">
           {toast.text}
@@ -156,16 +196,18 @@ function EmptyState() {
           ))}
         </div>
         <h2>An empty factory floor</h2>
-        <p>Drag a Source from the palette, press 1–4 to drop a building, or double-click anywhere on the floor.</p>
+        <p>
+          Pick a building from the bar below (keys 2–5), left-click to build, <b>R</b> to rotate. Press <b>1</b> and drag to lay belts
+          from a building's output side into the next one. Right-click destroys.
+        </p>
         <div className="empty-actions">
           <button
             className="btn primary"
             onClick={() => {
-              const s = useFactory.getState();
-              s.addNode('source', placementCell('source', false));
+              useFactory.getState().setTool({ type: 'building', kind: 'source', blueprintId: null });
             }}
           >
-            Place a source
+            Build a source
           </button>
           <button className="btn" onClick={() => openPipeline(examplePipeline())}>
             Open the example factory

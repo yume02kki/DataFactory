@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { traceLinks } from '../model/ops';
 import { blankPipeline, examplePipeline } from '../model/defaults';
 import * as storage from '../model/storage';
 import { useFactory } from '../store/useFactory';
@@ -20,7 +21,9 @@ export function saveNow(): boolean {
 
 export function TopBar({ saved, onHelp }: { saved: boolean; onHelp: () => void }) {
   const name = useFactory((s) => s.pipeline.name);
-  const counts = useFactory((s) => `${s.pipeline.nodes.length} buildings · ${s.pipeline.belts.length} belts · ${s.pipeline.items.length} items`);
+  const pipeline = useFactory((s) => s.pipeline);
+  const lines = useMemo(() => traceLinks(pipeline).length, [pipeline]);
+  const counts = `${pipeline.nodes.length} buildings · ${lines} belts · ${pipeline.items.length} items`;
   const zoom = useFactory((s) => s.view.zoom);
   const flowing = useFactory((s) => s.flowing);
   const canUndo = useFactory((s) => s.past.length > 0);

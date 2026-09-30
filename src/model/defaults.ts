@@ -1,5 +1,6 @@
 import { uid } from './ids';
-import type { Blueprint, FactoryNode, ItemShape, ItemType, NodeKind, Pipeline } from './types';
+import { lPath } from './geometry';
+import type { BeltTile, Blueprint, Dir, FactoryNode, ItemShape, ItemType, NodeKind, Pipeline } from './types';
 
 export const NODE_KINDS: NodeKind[] = ['source', 'machine', 'buffer', 'store'];
 
@@ -17,38 +18,38 @@ export const KIND_META: Record<NodeKind, KindMeta> = {
   source: {
     label: 'Source',
     plural: 'Sources',
-    color: '#4cb86b',
+    color: '#8fd35f',
     hint: 'Where data originates',
     hasInput: false,
     hasOutput: true,
-    hotkey: '1',
+    hotkey: '2',
   },
   machine: {
     label: 'Machine',
     plural: 'Machines',
-    color: '#4d8ff0',
+    color: '#6aa9f0',
     hint: 'Transforms, enriches, validates, filters or aggregates',
-    hasInput: true,
-    hasOutput: true,
-    hotkey: '2',
-  },
-  buffer: {
-    label: 'Buffer',
-    plural: 'Buffers',
-    color: '#f2a93b',
-    hint: 'Temporarily holds or transports data',
     hasInput: true,
     hasOutput: true,
     hotkey: '3',
   },
+  buffer: {
+    label: 'Buffer',
+    plural: 'Buffers',
+    color: '#f3c14f',
+    hint: 'Temporarily holds or transports data',
+    hasInput: true,
+    hasOutput: true,
+    hotkey: '4',
+  },
   store: {
     label: 'Store',
     plural: 'Stores',
-    color: '#9b6ee0',
+    color: '#b58af0',
     hint: 'Where processed data ends up',
     hasInput: true,
     hasOutput: false,
-    hotkey: '4',
+    hotkey: '5',
   },
 };
 
@@ -56,15 +57,15 @@ export const ITEM_SHAPES: ItemShape[] = ['circle', 'square', 'diamond', 'triangl
 
 /** A restrained, colourful palette used for items and custom buildings. */
 export const SWATCHES = [
-  '#e8515d',
-  '#f28a3b',
-  '#f2c230',
-  '#4cb86b',
-  '#2fb3b3',
-  '#4d8ff0',
-  '#9b6ee0',
-  '#e069b4',
-  '#8a94a6',
+  '#ff666a',
+  '#ffa24d',
+  '#fcf52a',
+  '#78ff66',
+  '#87fff5',
+  '#66a7ff',
+  '#dd66ff',
+  '#ff8fd0',
+  '#aaaaaa',
 ];
 
 /**
@@ -117,6 +118,7 @@ export function makeNode(
   x: number,
   y: number,
   blueprint?: Pick<Blueprint, 'name' | 'technology' | 'color' | 'description'>,
+  rotation: Dir = 0,
 ): FactoryNode {
   return {
     id: uid('node'),
@@ -128,6 +130,7 @@ export function makeNode(
     color: blueprint?.color || KIND_META[kind].color,
     x,
     y,
+    rotation,
     inputs: [],
     outputs: [],
     metadata: [],
@@ -162,7 +165,7 @@ export function examplePipeline(): Pipeline {
     {
       name: 'Visit',
       shape: 'circle',
-      color: '#e8515d',
+      color: '#ff666a',
       description: 'A single page visit captured by the tracker.',
       fields: [
         { id: uid('f'), name: 'visit_id', type: 'string' },
@@ -176,7 +179,7 @@ export function examplePipeline(): Pipeline {
     {
       name: 'Enriched Visit',
       shape: 'diamond',
-      color: '#f28a3b',
+      color: '#ffa24d',
       description: 'Visit plus geo and device information.',
       fields: [
         { id: uid('f'), name: 'country', type: 'string' },
@@ -186,18 +189,18 @@ export function examplePipeline(): Pipeline {
     1,
   );
   const valid = makeItem(
-    { name: 'Valid Visit', shape: 'square', color: '#4cb86b', description: 'Visit that passed all checks.' },
+    { name: 'Valid Visit', shape: 'square', color: '#78ff66', description: 'Visit that passed all checks.' },
     2,
   );
   const invalid = makeItem(
-    { name: 'Rejected Visit', shape: 'triangle', color: '#8a94a6', description: 'Visit that failed validation.' },
+    { name: 'Rejected Visit', shape: 'triangle', color: '#aaaaaa', description: 'Visit that failed validation.' },
     3,
   );
   const summary = makeItem(
     {
       name: 'Visit Summary',
       shape: 'hexagon',
-      color: '#4d8ff0',
+      color: '#66a7ff',
       description: 'Hourly visit counts per page and country.',
       fields: [
         { id: uid('f'), name: 'hour', type: 'timestamp' },
@@ -268,20 +271,33 @@ export function examplePipeline(): Pipeline {
   });
   p.nodes = [source, enrich, buffer, validate, aggregate, store, dead];
 
-  const belt = (from: FactoryNode, to: FactoryNode, itemId: string) => ({
-    id: uid('belt'),
-    from: from.id,
-    to: to.id,
-    itemId,
-    description: '',
-  });
-  p.belts = [
-    belt(source, enrich, visit.id),
-    belt(enrich, buffer, enriched.id),
-    belt(buffer, validate, enriched.id),
-    belt(validate, aggregate, valid.id),
-    belt(aggregate, store, summary.id),
-    belt(validate, dead, invalid.id),
-  ];
+  // Belts are laid by hand, tile by tile, just like in the editor.
+  const lay = (itemId: string, ...waypoints: Array<[number, number]>) => {
+    const tiles: BeltTile[] = [];
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const [ax, ay] = waypoints[i];
+      const [bx, by] = waypoints[i + 1];
+      const seg = lPath({ x: ax, y: ay }, { x: bx, y: by }, ax !== bx ? 'h' : 'v', 0);
+      for (const c of i === 0 ? seg : seg.slice(1)) {
+        const prev = tiles[tiles.length - 1];
+        if (prev && prev.x === c.x && prev.y === c.y) continue;
+        tiles.push({ id: uid('belt'), x: c.x, y: c.y, dir: c.dir, itemId: null, description: '' });
+      }
+    }
+    // Each corner tile points towards the next segment.
+    for (let i = 0; i < tiles.length - 1; i++) {
+      const a = tiles[i];
+      const b = tiles[i + 1];
+      a.dir = b.x > a.x ? 0 : b.x < a.x ? 2 : b.y > a.y ? 1 : 3;
+    }
+    tiles[0].itemId = itemId;
+    p.belts.push(...tiles);
+  };
+  lay(visit.id, [3, 1], [7, 1]);
+  lay(enriched.id, [11, 1], [15, 1]);
+  lay(enriched.id, [21, 1], [25, 1]);
+  lay(valid.id, [29, 1], [33, 1]);
+  lay(summary.id, [37, 1], [41, 1]);
+  lay(invalid.id, [29, 2], [31, 2], [31, 9], [33, 9]);
   return p;
 }

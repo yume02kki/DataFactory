@@ -1,15 +1,15 @@
 import { produce } from 'immer';
 import { create } from 'zustand';
 import { KIND_META, makeItem, makeNode } from '../model/defaults';
-import { KIND_SIZE } from '../model/geometry';
+import { rotateDir, type Pt } from '../model/geometry';
 import { uid } from '../model/ids';
 import * as ops from '../model/ops';
-import type { Blueprint, ItemType, NodeKind, Pipeline, Selection, Viewport } from '../model/types';
+import type { Blueprint, Dir, FactoryNode, ItemType, NodeKind, Pipeline, Selection, Tool, Viewport } from '../model/types';
 
 const HISTORY_LIMIT = 120;
 const COALESCE_MS = 1200;
 
-const EMPTY_SELECTION: Selection = { nodes: [], belt: null, item: null };
+const EMPTY_SELECTION: Selection = { nodes: [], tiles: [], belt: null, item: null };
 
 export interface Toast {
   id: number;
@@ -26,11 +26,15 @@ export interface FactoryState {
   flowing: boolean;
   highlightItem: string | null;
   toast: Toast | null;
+  /** Active build tool; null means select / move. */
+  tool: Tool | null;
+  /** Rotation used for the next building or belt tile placed. */
+  rotation: Dir;
 
   loadPipeline: (p: Pipeline) => void;
   /** Applies a change to the pipeline. Edits sharing a `coalesce` key within a short window form one undo step. */
   edit: (recipe: (draft: Pipeline) => void, opts?: { coalesce?: string; history?: boolean }) => void;
-  /** Records the current state as an undo step (used before continuous gestures like dragging). */
+  /** Records the current state as an undo step (used before continuous gestures). */
   checkpoint: () => void;
   undo: () => void;
   redo: () => void;
@@ -40,8 +44,12 @@ export interface FactoryState {
   selectNodes: (ids: string[], additive?: boolean) => void;
   clearSelection: () => void;
 
-  addNode: (kind: NodeKind, cell: { x: number; y: number }, blueprint?: Blueprint) => string;
-  addBelt: (from: string, to: string) => string | null;
+  setTool: (tool: Tool | null) => void;
+  /** R: rotates the ghost while building, otherwise the selected buildings. */
+  rotate: (steps: number, hoverCell?: Pt | null) => void;
+
+  placeNode: (kind: NodeKind, at: Pt, rotation: Dir, blueprint?: Blueprint, template?: Partial<FactoryNode>) => string | null;
+  paintBelt: (cells: Array<Pt & { dir: Dir }>) => void;
   deleteSelection: () => void;
   duplicateSelection: () => void;
   addItem: (partial?: Partial<ItemType>) => string;
@@ -63,11 +71,15 @@ export const useFactory = create<FactoryState>()((set, get) => {
   };
 
   /** Drops selected ids that no longer exist (after undo, delete, ...). */
-  const pruneSelection = (p: Pipeline, sel: Selection): Selection => ({
-    nodes: sel.nodes.filter((id) => p.nodes.some((n) => n.id === id)),
-    belt: sel.belt && p.belts.some((b) => b.id === sel.belt) ? sel.belt : null,
-    item: sel.item && p.items.some((i) => i.id === sel.item) ? sel.item : null,
-  });
+  const pruneSelection = (p: Pipeline, sel: Selection): Selection => {
+    const tileIds = new Set(p.belts.map((t) => t.id));
+    return {
+      nodes: sel.nodes.filter((id) => p.nodes.some((n) => n.id === id)),
+      tiles: sel.tiles.filter((id) => tileIds.has(id)),
+      belt: sel.belt && tileIds.has(sel.belt) ? sel.belt : null,
+      item: sel.item && p.items.some((i) => i.id === sel.item) ? sel.item : null,
+    };
+  };
 
   return {
     pipeline: { id: '', name: '', description: '', items: [], blueprints: [], nodes: [], belts: [], view: { x: 0, y: 0, zoom: 1 }, createdAt: 0, updatedAt: 0 },
@@ -79,9 +91,11 @@ export const useFactory = create<FactoryState>()((set, get) => {
     flowing: true,
     highlightItem: null,
     toast: null,
+    tool: null,
+    rotation: 0,
 
     loadPipeline: (p) =>
-      set({ pipeline: p, view: p.view, selection: EMPTY_SELECTION, past: [], future: [], lastEdit: null, highlightItem: null }),
+      set({ pipeline: p, view: p.view, selection: EMPTY_SELECTION, past: [], future: [], lastEdit: null, highlightItem: null, tool: null }),
 
     edit: (recipe, opts = {}) => {
       const { history = true, coalesce } = opts;
@@ -126,58 +140,84 @@ export const useFactory = create<FactoryState>()((set, get) => {
     select: (sel) => set({ selection: { ...EMPTY_SELECTION, ...sel } }),
 
     selectNodes: (ids, additive = false) => {
-      const current = get().selection.nodes;
       if (!additive) {
         set({ selection: { ...EMPTY_SELECTION, nodes: ids } });
         return;
       }
-      const next = new Set(current);
+      const { nodes, tiles } = get().selection;
+      const next = new Set(nodes);
       for (const id of ids) {
         if (next.has(id)) next.delete(id);
         else next.add(id);
       }
-      set({ selection: { ...EMPTY_SELECTION, nodes: [...next] } });
+      set({ selection: { ...EMPTY_SELECTION, nodes: [...next], tiles } });
     },
 
     clearSelection: () => set({ selection: EMPTY_SELECTION }),
 
-    addNode: (kind, cell, blueprint) => {
-      const size = KIND_SIZE[kind];
-      const spot = ops.findFreeSpot(get().pipeline, cell.x, cell.y, size.w, size.h, (n) => KIND_SIZE[n.kind]);
-      const node = makeNode(kind, spot.x, spot.y, blueprint);
+    setTool: (tool) => set({ tool }),
+
+    rotate: (steps, hoverCell) => {
+      const { tool, selection, pipeline } = get();
+      if (tool) {
+        set({ rotation: rotateDir(get().rotation, steps) });
+        return;
+      }
+      if (selection.nodes.length) {
+        let n = 0;
+        get().edit((p) => {
+          n = ops.rotateNodes(p, selection.nodes, steps);
+        });
+        if (n < selection.nodes.length) get().notify('No room to rotate there');
+        return;
+      }
+      const tile = hoverCell && pipeline.belts.find((t) => t.x === hoverCell.x && t.y === hoverCell.y);
+      if (tile) {
+        get().edit((p) => {
+          const t = p.belts.find((x) => x.id === tile.id);
+          if (t) t.dir = rotateDir(t.dir, steps);
+        });
+        return;
+      }
+      set({ rotation: rotateDir(get().rotation, steps) });
+    },
+
+    placeNode: (kind, at, rotation, blueprint, template) => {
+      const { pipeline } = get();
+      if (!ops.canPlaceNode(pipeline, kind, at.x, at.y, rotation)) return null;
+      const node = { ...makeNode(kind, at.x, at.y, blueprint, rotation), ...(template ?? {}), id: uid('node'), x: at.x, y: at.y, rotation, kind };
       get().edit((p) => {
-        // Give duplicates of the same type distinct names so labels stay useful.
-        const taken = new Set(p.nodes.map((n) => n.name));
-        if (taken.has(node.name)) {
-          let i = 2;
-          while (taken.has(`${node.name} ${i}`)) i++;
-          node.name = `${node.name} ${i}`;
-        }
-        p.nodes.push(node);
+        node.name = ops.copyName(p, node.name);
+        p.nodes.push({
+          ...node,
+          inputs: [...node.inputs],
+          outputs: [...node.outputs],
+          metadata: node.metadata.map((m) => ({ ...m, id: uid('m') })),
+        });
+        ops.syncLinkItems(p);
       });
-      set({ selection: { ...EMPTY_SELECTION, nodes: [node.id] } });
       return node.id;
     },
 
-    addBelt: (from, to) => {
-      const check = ops.canConnect(get().pipeline, from, to);
-      if (!check.ok) {
-        if (check.reason !== 'A building cannot feed itself') get().notify(check.reason);
-        return null;
-      }
-      let id: string | null = null;
+    paintBelt: (cells) => {
+      if (!cells.length) return;
       get().edit((p) => {
-        id = ops.connect(p, from, to)?.id ?? null;
+        ops.paintBelt(p, cells);
+        ops.syncLinkItems(p);
       });
-      return id;
     },
 
     deleteSelection: () => {
-      const { selection } = get();
-      if (selection.nodes.length) {
-        get().edit((p) => ops.removeNodes(p, selection.nodes));
+      const { selection, pipeline } = get();
+      if (selection.nodes.length || selection.tiles.length) {
+        get().edit((p) => {
+          ops.removeNodes(p, selection.nodes);
+          ops.removeTiles(p, selection.tiles);
+        });
       } else if (selection.belt) {
-        get().edit((p) => ops.removeBelt(p, selection.belt!));
+        const link = ops.traceLinks(pipeline).find((l) => l.tiles.some((t) => t.id === selection.belt));
+        const ids = link ? link.tiles.map((t) => t.id) : [selection.belt];
+        get().edit((p) => ops.removeTiles(p, ids));
       } else if (selection.item) {
         get().deleteItem(selection.item);
       }
@@ -185,17 +225,14 @@ export const useFactory = create<FactoryState>()((set, get) => {
     },
 
     duplicateSelection: () => {
-      const { selection } = get();
-      if (!selection.nodes.length) return;
-      let ids: string[] = [];
+      const { selection, pipeline } = get();
+      if (!selection.nodes.length && !selection.tiles.length) return;
+      const { dx, dy } = ops.freeOffset(pipeline, selection.nodes, selection.tiles);
+      let ids = { nodes: [] as string[], tiles: [] as string[] };
       get().edit((p) => {
-        const nodes = p.nodes.filter((n) => selection.nodes.includes(n.id));
-        const minY = Math.min(...nodes.map((n) => n.y));
-        const maxY = Math.max(...nodes.map((n) => n.y + KIND_SIZE[n.kind].h));
-        // Stamp the copy directly below the original selection.
-        ids = ops.duplicateNodes(p, selection.nodes, 0, maxY - minY + 2);
+        ids = ops.duplicate(p, selection.nodes, selection.tiles, dx, dy);
       });
-      set({ selection: { ...EMPTY_SELECTION, nodes: ids } });
+      set({ selection: { ...EMPTY_SELECTION, ...ids } });
     },
 
     addItem: (partial = {}) => {
@@ -209,27 +246,22 @@ export const useFactory = create<FactoryState>()((set, get) => {
 
     deleteItem: (id) => {
       get().edit((p) => ops.removeItem(p, id));
-      const { selection } = get();
-      if (selection.item === id) set({ selection: EMPTY_SELECTION });
+      if (get().selection.item === id) set({ selection: EMPTY_SELECTION });
     },
 
     addBlueprint: (kind, partial) => {
-      const bp: Blueprint = {
-        id: uid('bp'),
-        kind,
-        name: 'Custom',
-        description: '',
-        technology: '',
-        color: KIND_META[kind].color,
-        ...partial,
-      };
+      const bp: Blueprint = { id: uid('bp'), kind, name: 'Custom', description: '', technology: '', color: KIND_META[kind].color, ...partial };
       get().edit((p) => {
         p.blueprints.push(bp);
       });
       return bp.id;
     },
 
-    deleteBlueprint: (id) => get().edit((p) => void (p.blueprints = p.blueprints.filter((b) => b.id !== id))),
+    deleteBlueprint: (id) => {
+      get().edit((p) => void (p.blueprints = p.blueprints.filter((b) => b.id !== id)));
+      const tool = get().tool;
+      if (tool?.type === 'building' && tool.blueprintId === id) set({ tool: null });
+    },
 
     toggleFlow: () => set({ flowing: !get().flowing }),
     setHighlightItem: (highlightItem) => set({ highlightItem }),

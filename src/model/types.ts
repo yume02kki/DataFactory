@@ -4,6 +4,9 @@
  */
 export type NodeKind = 'source' | 'machine' | 'buffer' | 'store';
 
+/** Grid direction: 0 → right, 1 → down, 2 → left, 3 → up. */
+export type Dir = 0 | 1 | 2 | 3;
+
 export type ItemShape = 'circle' | 'square' | 'diamond' | 'triangle' | 'hexagon' | 'star';
 
 /** A field of an item's schema, e.g. `visit_id: string`. */
@@ -54,6 +57,8 @@ export interface FactoryNode {
   color: string;
   x: number;
   y: number;
+  /** Direction items flow through the building: in at the back, out at the front. */
+  rotation: Dir;
   /** Item type ids this component consumes. */
   inputs: string[];
   /** Item type ids this component produces. */
@@ -61,11 +66,17 @@ export interface FactoryNode {
   metadata: MetaEntry[];
 }
 
-/** A conveyor belt carrying one item type from one building to another. */
-export interface Belt {
+/**
+ * One tile of conveyor belt, placed by hand. Items move in `dir`.
+ * Connections between buildings are derived by following tiles
+ * from a building's output face into another building's input face.
+ */
+export interface BeltTile {
   id: string;
-  from: string;
-  to: string;
+  x: number;
+  y: number;
+  dir: Dir;
+  /** Item explicitly assigned to the belt line that starts at this tile. */
   itemId: string | null;
   description: string;
 }
@@ -83,7 +94,7 @@ export interface Pipeline {
   items: ItemType[];
   blueprints: Blueprint[];
   nodes: FactoryNode[];
-  belts: Belt[];
+  belts: BeltTile[];
   view: Viewport;
   createdAt: number;
   updatedAt: number;
@@ -91,6 +102,14 @@ export interface Pipeline {
 
 export interface Selection {
   nodes: string[];
+  /** Belt tiles picked with the box select (moved and deleted with the buildings). */
+  tiles: string[];
+  /** A belt tile whose belt line is shown in the inspector. */
   belt: string | null;
   item: string | null;
 }
+
+/** What a left click does on the floor. `null` is plain select / move. */
+export type Tool =
+  | { type: 'belt' }
+  | { type: 'building'; kind: NodeKind; blueprintId: string | null; template?: Partial<FactoryNode> };

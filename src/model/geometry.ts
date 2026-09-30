@@ -1,15 +1,26 @@
-import type { FactoryNode, NodeKind } from './types';
+import type { Dir, FactoryNode, NodeKind } from './types';
 
 /** Size of one grid cell in world pixels. */
 export const CELL = 32;
 
-/** Footprint of each building in grid cells. Heights are odd so ports sit on a cell centre. */
+/** Footprint of each building in grid cells, unrotated (flowing to the right). */
 export const KIND_SIZE: Record<NodeKind, { w: number; h: number }> = {
   source: { w: 3, h: 3 },
   machine: { w: 3, h: 3 },
   buffer: { w: 5, h: 3 },
   store: { w: 3, h: 3 },
 };
+
+/** Unit vectors for each direction. */
+export const DV: ReadonlyArray<readonly [number, number]> = [
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+  [0, -1],
+];
+
+export const opposite = (d: Dir): Dir => ((d + 2) % 4) as Dir;
+export const rotateDir = (d: Dir, steps: number): Dir => ((((d + steps) % 4) + 4) % 4) as Dir;
 
 export interface Pt {
   x: number;
@@ -23,23 +34,84 @@ export interface Rect {
   h: number;
 }
 
-export function nodeRect(node: Pick<FactoryNode, 'kind' | 'x' | 'y'>): Rect {
-  const size = KIND_SIZE[node.kind];
-  return { x: node.x * CELL, y: node.y * CELL, w: size.w * CELL, h: size.h * CELL };
+export const cellKey = (x: number, y: number) => `${x},${y}`;
+
+/** Footprint in cells after rotation (vertical buildings swap width and height). */
+export function footprint(kind: NodeKind, rotation: Dir): { w: number; h: number } {
+  const s = KIND_SIZE[kind];
+  return rotation % 2 === 0 ? { w: s.w, h: s.h } : { w: s.h, h: s.w };
 }
 
-export function inPort(node: Pick<FactoryNode, 'kind' | 'x' | 'y'>): Pt {
-  const r = nodeRect(node);
-  return { x: r.x, y: r.y + r.h / 2 };
+type Placed = Pick<FactoryNode, 'kind' | 'x' | 'y' | 'rotation'>;
+
+export function nodeRect(node: Placed): Rect {
+  const f = footprint(node.kind, node.rotation);
+  return { x: node.x * CELL, y: node.y * CELL, w: f.w * CELL, h: f.h * CELL };
 }
 
-export function outPort(node: Pick<FactoryNode, 'kind' | 'x' | 'y'>): Pt {
-  const r = nodeRect(node);
-  return { x: r.x + r.w, y: r.y + r.h / 2 };
+export function nodeCells(node: Placed): Pt[] {
+  const f = footprint(node.kind, node.rotation);
+  const cells: Pt[] = [];
+  for (let dy = 0; dy < f.h; dy++) for (let dx = 0; dx < f.w; dx++) cells.push({ x: node.x + dx, y: node.y + dy });
+  return cells;
 }
 
-export function rectContains(r: Rect, p: Pt, pad = 0): boolean {
-  return p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad;
+/** The cells just outside the face of a building that points in `side`. */
+export function faceCells(node: Placed, side: Dir): Pt[] {
+  const f = footprint(node.kind, node.rotation);
+  const cells: Pt[] = [];
+  if (side === 0) for (let i = 0; i < f.h; i++) cells.push({ x: node.x + f.w, y: node.y + i });
+  if (side === 2) for (let i = 0; i < f.h; i++) cells.push({ x: node.x - 1, y: node.y + i });
+  if (side === 1) for (let i = 0; i < f.w; i++) cells.push({ x: node.x + i, y: node.y + f.h });
+  if (side === 3) for (let i = 0; i < f.w; i++) cells.push({ x: node.x + i, y: node.y - 1 });
+  return cells;
+}
+
+/** Cells where belts pick items up from a building. */
+export const outputCells = (node: Placed) => faceCells(node, node.rotation);
+/** Cells from which belts deliver items into a building. */
+export const inputCells = (node: Placed) => faceCells(node, opposite(node.rotation));
+
+export const cellCenter = (x: number, y: number): Pt => ({ x: (x + 0.5) * CELL, y: (y + 0.5) * CELL });
+
+/** Top-left cell for a building of `kind` centred on the cell under the cursor. */
+export function anchorFor(kind: NodeKind, rotation: Dir, cell: Pt): Pt {
+  const f = footprint(kind, rotation);
+  return { x: cell.x - Math.floor(f.w / 2), y: cell.y - Math.floor(f.h / 2) };
+}
+
+/**
+ * Cells from `a` to `b` in an L shape (along `firstAxis` first), each with
+ * the direction to the next cell. The last tile keeps the final direction,
+ * or `fallback` when the path is a single cell.
+ */
+export function lPath(a: Pt, b: Pt, firstAxis: 'h' | 'v', fallback: Dir): Array<Pt & { dir: Dir }> {
+  const cells: Pt[] = [{ ...a }];
+  const cur = { ...a };
+  const stepX = () => {
+    while (cur.x !== b.x) {
+      cur.x += Math.sign(b.x - cur.x);
+      cells.push({ ...cur });
+    }
+  };
+  const stepY = () => {
+    while (cur.y !== b.y) {
+      cur.y += Math.sign(b.y - cur.y);
+      cells.push({ ...cur });
+    }
+  };
+  if (firstAxis === 'h') {
+    stepX();
+    stepY();
+  } else {
+    stepY();
+    stepX();
+  }
+  const dirTo = (p: Pt, q: Pt): Dir => (q.x > p.x ? 0 : q.x < p.x ? 2 : q.y > p.y ? 1 : 3);
+  return cells.map((c, i) => {
+    if (i < cells.length - 1) return { ...c, dir: dirTo(c, cells[i + 1]) };
+    return { ...c, dir: i > 0 ? dirTo(cells[i - 1], c) : fallback };
+  });
 }
 
 export function rectsIntersect(a: Rect, b: Rect): boolean {
@@ -48,28 +120,6 @@ export function rectsIntersect(a: Rect, b: Rect): boolean {
 
 export function normalizeRect(a: Pt, b: Pt): Rect {
   return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) };
-}
-
-/**
- * Orthogonal conveyor route from an output port to an input port.
- * Forward belts use a single S-bend; belts that have to go "backwards"
- * loop around underneath both buildings so flow direction stays readable.
- */
-export function routeBelt(a: Pt, b: Pt, fromRect?: Rect, toRect?: Rect): Pt[] {
-  const gap = b.x - a.x;
-  if (gap >= CELL) {
-    if (Math.abs(a.y - b.y) < 0.5) return [a, b];
-    const mx = a.x + Math.round(gap / 2 / (CELL / 2)) * (CELL / 2);
-    return [a, { x: mx, y: a.y }, { x: mx, y: b.y }, b];
-  }
-  const out = a.x + CELL * 0.75;
-  const back = b.x - CELL * 0.75;
-  const bottoms = [a.y, b.y];
-  if (fromRect) bottoms.push(fromRect.y + fromRect.h);
-  if (toRect) bottoms.push(toRect.y + toRect.h);
-  // Lanes below the buildings leave room for the name labels.
-  const lane = Math.max(...bottoms) + CELL * 1.75;
-  return [a, { x: out, y: a.y }, { x: out, y: lane }, { x: back, y: lane }, { x: back, y: b.y }, b];
 }
 
 /** SVG path through the points with softly rounded corners. */
@@ -87,7 +137,8 @@ export function pathFromPoints(points: Pt[], radius = 12): string {
     const inLen = Math.hypot(p.x - prev.x, p.y - prev.y);
     const outLen = Math.hypot(next.x - p.x, next.y - p.y);
     const r = Math.min(radius, inLen / 2, outLen / 2);
-    if (r < 0.5) {
+    const turn = (p.x - prev.x) * (next.y - p.y) - (p.y - prev.y) * (next.x - p.x);
+    if (r < 0.5 || Math.abs(turn) < 1e-6) {
       d += ` L ${p.x} ${p.y}`;
       continue;
     }
@@ -101,16 +152,13 @@ export function pathFromPoints(points: Pt[], radius = 12): string {
 
 export function polylineLength(points: Pt[]): number {
   let len = 0;
-  for (let i = 1; i < points.length; i++) {
-    len += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
-  }
+  for (let i = 1; i < points.length; i++) len += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
   return len;
 }
 
-/** Point halfway along a polyline, plus the direction of travel there. */
+/** Point halfway along a polyline, plus whether travel there is horizontal. */
 export function polylineMidpoint(points: Pt[]): { p: Pt; horizontal: boolean } {
-  const total = polylineLength(points);
-  let target = total / 2;
+  let target = polylineLength(points) / 2;
   for (let i = 1; i < points.length; i++) {
     const a = points[i - 1];
     const b = points[i];
@@ -124,18 +172,19 @@ export function polylineMidpoint(points: Pt[]): { p: Pt; horizontal: boolean } {
   return { p: points[0] ?? { x: 0, y: 0 }, horizontal: true };
 }
 
-export function nodesBounds(nodes: FactoryNode[]): Rect | null {
-  if (nodes.length === 0) return null;
+export function contentBounds(nodes: Placed[], tiles: Pt[]): Rect | null {
+  if (nodes.length === 0 && tiles.length === 0) return null;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const n of nodes) {
-    const r = nodeRect(n);
+  const add = (r: Rect) => {
     minX = Math.min(minX, r.x);
     minY = Math.min(minY, r.y);
     maxX = Math.max(maxX, r.x + r.w);
     maxY = Math.max(maxY, r.y + r.h);
-  }
+  };
+  for (const n of nodes) add(nodeRect(n));
+  for (const t of tiles) add({ x: t.x * CELL, y: t.y * CELL, w: CELL, h: CELL });
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }

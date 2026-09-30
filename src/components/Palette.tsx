@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { KIND_META, NODE_KINDS, SWATCHES } from '../model/defaults';
 import type { Blueprint, NodeKind } from '../model/types';
 import { useFactory } from '../store/useFactory';
-import { placementCell } from '../lib/viewport';
 import { DND_MIME, type DragPayload } from './Canvas';
 import { ItemIcon } from './ItemGlyph';
 import { KindIcon } from './KindIcon';
@@ -111,8 +110,11 @@ function KindSection({ kind, collapsed, onToggle }: { kind: NodeKind; collapsed:
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const meta = KIND_META[kind];
 
+  const tool = useFactory((s) => s.tool);
+  const armed = (bpId: string | null) => tool?.type === 'building' && tool.kind === kind && tool.blueprintId === bpId && !tool.template;
   const place = (bp?: Blueprint) => {
-    useFactory.getState().addNode(kind, placementCell(kind, false), bp);
+    const id = bp?.id ?? null;
+    useFactory.getState().setTool(armed(id) ? null : { type: 'building', kind, blueprintId: id });
   };
 
   return (
@@ -136,14 +138,12 @@ function KindSection({ kind, collapsed, onToggle }: { kind: NodeKind; collapsed:
               ) : (
                 <div
                   key={bp.id}
-                  className="tile"
+                  className={`tile${armed(bp.id) ? ' active' : ''}`}
                   role="button"
                   tabIndex={0}
-                  draggable
-                  onDragStart={(e) => setDrag(e, { type: 'blueprint', id: bp.id })}
                   onClick={() => place(bp)}
                   onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && place(bp)}
-                  title={`${bp.description || meta.hint}\nDrag onto the floor, or click to place`}
+                  title={`${bp.description || meta.hint}\nClick, then left-click the floor to build`}
                 >
                   <KindIcon kind={kind} color={bp.color} size={38} />
                   <span className="tile-name">{bp.name}</span>
@@ -163,11 +163,9 @@ function KindSection({ kind, collapsed, onToggle }: { kind: NodeKind; collapsed:
               ),
             )}
             <div
-              className="tile tile-generic"
+              className={`tile tile-generic${armed(null) ? ' active' : ''}`}
               role="button"
               tabIndex={0}
-              draggable
-              onDragStart={(e) => setDrag(e, { type: 'kind', kind })}
               onClick={() => place()}
               onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && place()}
               title={`A blank ${meta.label.toLowerCase()} (hotkey ${meta.hotkey})`}

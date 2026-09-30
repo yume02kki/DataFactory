@@ -24,10 +24,10 @@ On first launch the app opens the example **Visit Analytics** factory. Use
 | Block | Role | Ports |
 | --- | --- | --- |
 | **Item** | The data flowing through the factory (`Visit`, `Order`, `File`…) | — |
-| **Source** | Where data originates | output |
-| **Machine** | Transforms, enriches, validates, filters, aggregates… | input + output |
-| **Buffer** | Temporarily holds or transports data between machines | input + output |
-| **Store** | Where processed data ends up | input |
+| **Source** | Where data originates | output side |
+| **Machine** | Transforms, enriches, validates, filters, aggregates… | input side + output side |
+| **Buffer** | Temporarily holds or transports data between machines | input side + output side |
+| **Store** | Where processed data ends up | input side |
 
 The app is **technology-agnostic**. Nothing is built in for any specific tool.
 Every building has:
@@ -46,16 +46,23 @@ colour, a description and an optional field schema.
 
 ## Controls
 
+It plays like shapez.io: pick a tool, left-click to build, right-click to destroy.
+
 | Action | How |
 | --- | --- |
-| Place a building | Drag a tile from the palette, click a tile, press `1`–`4` at the cursor, or double-click the floor |
-| Connect | Drag from a building's ▶ output port onto another building. Drop on empty floor to build and connect in one go |
-| Choose what a belt carries | Drag an item from the palette onto the belt, or pick it in the belt inspector |
-| Move | Drag buildings (they snap to the grid). Use arrow keys to nudge (`Shift`: 4 cells) |
-| Multi-select | `Shift`+click, `Shift`+drag a box, `Ctrl A` |
-| Duplicate / delete | `Ctrl D` (belts inside the selection are kept) / `Del` |
+| Pick a tool | Hotbar at the bottom: `1` Belt, `2` Source, `3` Machine, `4` Buffer, `5` Store. Clicking a palette tile picks that component type |
+| Build | Left-click the floor. A ghost shows where it will go and turns red when something is in the way |
+| Rotate | `R` / `Shift R` rotates the tool, the selected buildings, or the belt under the cursor |
+| Lay belts | With the belt tool, left-drag. Belts follow an L-shaped path and point the way you drag |
+| Connect | Items leave a building from the side with outward arrow tabs and enter from the side with inward tabs. A belt from one building's output side into another's input side connects them. A belt that stops short shows a red end |
+| Destroy | Right-click, or right-drag to destroy several things |
+| Put the tool away | Right-click empty floor, or `Esc` |
+| Pipette | `Q` picks up the building (with all its settings) or belt under the cursor as the tool |
+| Choose what a belt carries | Drag an item from the palette onto the belt, or click the belt and pick it in the inspector |
+| Select / move | With no tool, click a building and drag it. `Shift`+drag a box to select buildings and belts together, then drag or nudge them with the arrow keys |
+| Duplicate / delete | `Ctrl D` / `Del` |
 | Undo / redo | `Ctrl Z` / `Ctrl Shift Z` |
-| Pan / zoom | Drag the floor (or `Space`+drag, or the middle mouse button) / scroll, `+` `−`, `F` to fit |
+| Pan / zoom | Drag the floor, `WASD`, `Space`+drag or the middle mouse button / scroll, `+` `−`, `F` to fit |
 | Highlight a flow | Hover an item in the palette to see every belt and building that handles it |
 | Pause the animation | `P` or **Pause flow** |
 
@@ -64,7 +71,8 @@ Press `?` in the app for the full list.
 ## Saving
 
 Factories autosave to your browser's `localStorage`, including where you were
-looking. **Factories ▾** lists every saved factory and lets you open, delete,
+looking. Factories saved by the first version, whose belts were abstract links,
+get their belts laid out as tiles automatically when loaded. **Factories ▾** lists every saved factory and lets you open, delete,
 export (`.factory.json`) and import them. Imports are validated and repaired, so a
 hand-edited file with dangling references still loads.
 
@@ -72,11 +80,14 @@ hand-edited file with dangling references still loads.
 
 ```
 src/
-  model/        types, defaults & example, geometry (grid + belt routing), graph ops, storage
+  model/        types, defaults & example, geometry (grid, footprints, faces), ops (belt tracing, placement), storage
   store/        zustand store with undo/redo history
   components/   Canvas (SVG floor), NodeView/BuildingArt, BeltView, Palette, Inspector, TopBar
   lib/          viewport helpers, text measuring, colour utils
 ```
 
 Built with React, TypeScript, Vite, zustand and immer. The canvas is plain SVG.
-Belts are routed orthogonally, and items move along them with SMIL `animateMotion`.
+Belts are stored as individual grid tiles. Which buildings they connect is worked
+out by following the tiles from an output face until they enter an input face.
+Items move along those traced lines with SMIL `animateMotion`. The colour palette
+follows shapez.io's light theme. No shapez assets are used.

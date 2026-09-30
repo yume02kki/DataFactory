@@ -1,12 +1,12 @@
-import { CELL, KIND_SIZE, nodesBounds } from '../model/geometry';
-import type { NodeKind, Viewport } from '../model/types';
+import { contentBounds } from '../model/geometry';
+import type { Viewport } from '../model/types';
 import { useFactory } from '../store/useFactory';
 
 export const MIN_ZOOM = 0.2;
 export const MAX_ZOOM = 2.5;
 export const CANVAS_ID = 'factory-canvas';
 
-/** Last known pointer position on the canvas, in world pixels (for hotkey placement). */
+/** Last known pointer position on the canvas, in world pixels (for R and Q under the cursor). */
 export const pointer = { world: null as { x: number; y: number } | null };
 
 /** Space taken by the floating panels, so "fit" and "centre" use the visible floor. */
@@ -14,7 +14,7 @@ function insets() {
   const hasInspector = !!document.querySelector('.inspector');
   const narrow = window.innerWidth < 760;
   if (narrow) return { left: 16, right: 16, top: 120, bottom: window.innerHeight * 0.4 };
-  return { left: 290, right: hasInspector ? 340 : 24, top: 80, bottom: 56 };
+  return { left: 290, right: hasInspector ? 340 : 24, top: 80, bottom: 110 };
 }
 
 function canvasSize() {
@@ -42,7 +42,7 @@ export function zoomBy(factor: number) {
 
 export function fitToView() {
   const { pipeline, setView } = useFactory.getState();
-  const b = nodesBounds(pipeline.nodes);
+  const b = contentBounds(pipeline.nodes, pipeline.belts);
   const { w, h } = canvasSize();
   const ins = insets();
   if (!b) {
@@ -59,17 +59,3 @@ export function fitToView() {
   setView({ x, y, zoom });
 }
 
-/** Grid cell for a new building of `kind` centred on the visible floor (or the pointer). */
-export function placementCell(kind: NodeKind, atPointer: boolean): { x: number; y: number } {
-  const { view } = useFactory.getState();
-  const size = KIND_SIZE[kind];
-  let world = atPointer ? pointer.world : null;
-  if (!world) {
-    const { w, h } = canvasSize();
-    const ins = insets();
-    const sx = ins.left + (w - ins.left - ins.right) / 2;
-    const sy = ins.top + (h - ins.top - ins.bottom) / 2;
-    world = { x: (sx - view.x) / view.zoom, y: (sy - view.y) / view.zoom };
-  }
-  return { x: Math.round(world.x / CELL - size.w / 2), y: Math.round(world.y / CELL - size.h / 2) };
-}

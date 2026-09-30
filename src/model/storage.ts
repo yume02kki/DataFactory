@@ -1,6 +1,8 @@
 import { KIND_META, NODE_KINDS, ITEM_SHAPES, starterBlueprints } from './defaults';
 import { uid } from './ids';
-import type { Belt, Blueprint, FactoryNode, ItemType, Pipeline } from './types';
+import { inputCells, lPath, outputCells } from './geometry';
+import { paintBelt } from './ops';
+import type { BeltTile, Blueprint, Dir, FactoryNode, ItemType, Pipeline } from './types';
 
 const LIBRARY_KEY = 'datafactory.library.v1';
 const CURRENT_KEY = 'datafactory.current.v1';
@@ -131,6 +133,7 @@ export function normalizePipeline(input: unknown): Pipeline {
         color: str(o.color, KIND_META[kind].color),
         x: Math.round(num(o.x)),
         y: Math.round(num(o.y)),
+        rotation: ([0, 1, 2, 3].includes(o.rotation as number) ? o.rotation : 0) as Dir,
         inputs: KIND_META[kind].hasInput ? ids(o.inputs) : [],
         outputs: KIND_META[kind].hasOutput ? ids(o.outputs) : [],
         metadata: arr(o.metadata).map((m) => {
@@ -139,21 +142,27 @@ export function normalizePipeline(input: unknown): Pipeline {
         }),
       };
     });
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const belts: Belt[] = arr(raw.belts)
-    .map((v) => obj(v))
-    .filter((o) => {
-      const from = byId.get(str(o.from));
-      const to = byId.get(str(o.to));
-      return from && to && from !== to && KIND_META[from.kind].hasOutput && KIND_META[to.kind].hasInput;
-    })
+  const rawBelts = arr(raw.belts).map((v) => obj(v));
+  const tiles: BeltTile[] = rawBelts
+    .filter((o) => typeof o.x === 'number' && typeof o.y === 'number')
     .map((o) => ({
       id: str(o.id) || uid('belt'),
-      from: str(o.from),
-      to: str(o.to),
+      x: Math.round(num(o.x)),
+      y: Math.round(num(o.y)),
+      dir: ([0, 1, 2, 3].includes(o.dir as number) ? o.dir : 0) as Dir,
       itemId: typeof o.itemId === 'string' && itemIds.has(o.itemId) ? o.itemId : null,
       description: str(o.description),
     }));
+  // One tile per cell: later duplicates lose.
+  const seenCells = new Set<string>();
+  const belts = tiles.filter((t) => {
+    const k = `${t.x},${t.y}`;
+    if (seenCells.has(k)) return false;
+    seenCells.add(k);
+    return true;
+  });
+  const draft = { belts, nodes } as Pipeline;
+  migrateLinkBelts(draft, rawBelts, itemIds);
   const view = obj(raw.view);
   const now = Date.now();
   return {
@@ -163,11 +172,40 @@ export function normalizePipeline(input: unknown): Pipeline {
     items,
     blueprints,
     nodes,
-    belts,
+    belts: draft.belts,
     view: { x: num(view.x), y: num(view.y), zoom: Math.min(2.5, Math.max(0.2, num(view.zoom, 1))) },
     createdAt: num(raw.createdAt, now),
     updatedAt: num(raw.updatedAt, now),
   };
+}
+
+/**
+ * Early saves stored belts as abstract from → to links. Lay them out as
+ * tiles: across from the source's output, then down/up, then into the target.
+ */
+function migrateLinkBelts(p: Pipeline, raw: Record<string, unknown>[], itemIds: Set<string>) {
+  const byId = new Map(p.nodes.map((n) => [n.id, n]));
+  for (const o of raw) {
+    const from = byId.get(str(o.from));
+    const to = byId.get(str(o.to));
+    if (!from || !to || from === to || !KIND_META[from.kind].hasOutput || !KIND_META[to.kind].hasInput) continue;
+    const outs = outputCells(from);
+    const ins = inputCells(to);
+    const a = outs[Math.floor(outs.length / 2)];
+    const b = ins[Math.floor(ins.length / 2)];
+    if (b.x < a.x) continue;
+    const midX = Math.floor((a.x + b.x) / 2);
+    const cells = [...lPath(a, { x: midX, y: b.y }, 'h', 0), ...lPath({ x: midX, y: b.y }, b, 'h', 0).slice(1)];
+    // Where the two L-paths meet, point each tile at the next one.
+    for (let i = 0; i < cells.length - 1; i++) {
+      const [c, n] = [cells[i], cells[i + 1]];
+      c.dir = n.x > c.x ? 0 : n.x < c.x ? 2 : n.y > c.y ? 1 : 3;
+    }
+    const before = p.belts.length;
+    paintBelt(p, cells);
+    const first = p.belts.find((t) => t.x === a.x && t.y === a.y);
+    if (first && p.belts.length > before && typeof o.itemId === 'string' && itemIds.has(o.itemId)) first.itemId = o.itemId;
+  }
 }
 
 export function downloadPipeline(p: Pipeline): void {
