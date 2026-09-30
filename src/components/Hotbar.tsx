@@ -31,6 +31,7 @@ function toolLabel(tool: Tool | null, blueprintName?: string): string {
   if (!tool) return '';
   if (tool.type === 'belt') return 'Belt';
   if (tool.type === 'link') return 'Link';
+  if (tool.type === 'paste') return 'Paste';
   return tool.template?.name ?? blueprintName ?? KIND_META[tool.kind].label;
 }
 
@@ -47,12 +48,16 @@ export function Hotbar() {
       {tool && (
         <div className="tool-hint">
           <b>{toolLabel(tool, blueprintName)}</b>
-          {tool.type !== 'link' && (
+          {tool.type !== 'link' && tool.type !== 'paste' && (
             <span className="rot" style={{ transform: `rotate(${rotation * 90}deg)` }}>
               ➜
             </span>
           )}
-          {tool.type === 'link' ? (
+          {tool.type === 'paste' ? (
+            <span>
+              <kbd>Left</kbd> place (again for more) · <kbd>R</kbd> rotate · <kbd>Right</kbd> / <kbd>Esc</kbd> done
+            </span>
+          ) : tool.type === 'link' ? (
             <span>
               Drag from a building onto another · <kbd>Right</kbd> on an arrow deletes it · <kbd>Esc</kbd> done
             </span>

@@ -160,4 +160,6 @@ export interface Selection {
 export type Tool =
   | { type: 'belt' }
   | { type: 'link' }
+  /** Placing the copied selection (the clipboard). */
+  | { type: 'paste' }
   | { type: 'building'; kind: NodeKind; blueprintId: string | null; template?: Partial<FactoryNode> };

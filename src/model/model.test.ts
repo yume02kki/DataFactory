@@ -513,3 +513,46 @@ describe('ports in use', () => {
     expect(used.get(mac.id)?.size).toBe(1);
   });
 });
+
+describe('copy and paste', () => {
+  const wired = () => {
+    const t = tinyFactory(); // source(0) → belt 1..3 → machine(4), store at 8
+    ops.paintBelt(t.p, [1, 2, 3].map((x) => ({ x, y: 0, dir: 0 as Dir })));
+    ops.addArrow(t.p, t.src.id, t.mac.id);
+    return t;
+  };
+  const connections = (p: ReturnType<typeof blankPipeline>) =>
+    ops.traceLinks(p).filter((l) => l.to).map((l) => `${p.nodes.find((n) => n.id === l.from)?.name} -> ${p.nodes.find((n) => n.id === l.to)?.name}`);
+
+  it('pastes a working copy with fresh ids, names and arrows', () => {
+    const { p, src, mac } = wired();
+    const clip = ops.copySelection(p, [src.id, mac.id], p.belts.map((t) => t.id))!;
+    expect(clip).toMatchObject({ w: 5, h: 1 });
+    expect(ops.canPaste(p, clip, { x: 0, y: 0 })).toBe(false);
+    const ids = ops.pasteClip(p, clip, { x: 0, y: 3 })!;
+    expect(ids.nodes).toHaveLength(2);
+    expect(ids.tiles).toHaveLength(3);
+    expect(connections(p)).toEqual(['Source -> Machine', 'Source 2 -> Machine 2']);
+    expect(p.arrows).toHaveLength(2);
+    expect(p.arrows[1]).toMatchObject({ from: ids.nodes[0], to: ids.nodes[1] });
+  });
+
+  it('rotates the whole copy and it still connects', () => {
+    const { p, src, mac } = wired();
+    const clip = ops.rotateClip(ops.copySelection(p, [src.id, mac.id], p.belts.map((t) => t.id))!, 1);
+    expect(clip).toMatchObject({ w: 1, h: 5 });
+    expect(clip.nodes.map((n) => n.rotation)).toEqual([1, 1]);
+    ops.pasteClip(p, clip, { x: 12, y: 2 });
+    expect(connections(p)).toEqual(['Source -> Machine', 'Source 2 -> Machine 2']);
+    expect(ops.rotateClip(clip, 3)).toMatchObject({ w: 5, h: 1 });
+  });
+
+  it('brings the item types it uses into another factory', () => {
+    const { p, src, visit } = wired();
+    const clip = ops.copySelection(p, [src.id], [])!;
+    const other = blankPipeline();
+    ops.pasteClip(other, clip, { x: 0, y: 0 });
+    expect(other.items.map((i) => i.id)).toEqual([visit.id]);
+    expect(other.nodes[0].outputs).toEqual([visit.id]);
+  });
+});

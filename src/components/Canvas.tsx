@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ARROW_COLOR, KIND_META } from '../model/defaults';
-import { CELL, cellKey, nodeRect, normalizeRect, rectsIntersect, type Pt, type Rect } from '../model/geometry';
+import { CELL, cellKey, nodeCells, nodeRect, normalizeRect, rectsIntersect, type Pt, type Rect } from '../model/geometry';
 import * as ops from '../model/ops';
-import type { Dir, NodeKind } from '../model/types';
+import type { Dir, NodeKind, Pipeline } from '../model/types';
 import { useFactory } from '../store/useFactory';
 import { CANVAS_ID, pointer, zoomAt } from '../lib/viewport';
 import { exportFactory, type ExportFormat } from '../lib/exportImage';
@@ -62,6 +62,11 @@ function cellsBetween(a: Pt, b: Pt): Pt[] {
   return out;
 }
 
+/** Where a pasted clip's top-left goes so that it's centred on the cursor cell. */
+function pasteAnchor(clip: ops.Clip, cell: Pt): Pt {
+  return { x: cell.x - Math.floor(clip.w / 2), y: cell.y - Math.floor(clip.h / 2) };
+}
+
 export function Canvas() {
   const pipeline = useFactory((s) => s.pipeline);
   const view = useFactory((s) => s.view);
@@ -70,6 +75,7 @@ export function Canvas() {
   const highlightItem = useFactory((s) => s.highlightItem);
   const tool = useFactory((s) => s.tool);
   const exportArea = useFactory((s) => s.exportArea);
+  const clipboard = useFactory((s) => s.clipboard);
   const rotation = useFactory((s) => s.rotation);
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -198,6 +204,12 @@ export function Canvas() {
       return;
     }
     if (e.button !== 0) return;
+
+    if (tool?.type === 'paste') {
+      const clip = state.clipboard;
+      if (clip) state.pasteAt(pasteAnchor(clip, cell));
+      return;
+    }
 
     if (tool?.type === 'link') {
       // Drag from one building onto another to point an arrow at it.
@@ -508,6 +520,17 @@ export function Canvas() {
     return { building: { kind: tool.kind as NodeKind, at, color, valid, icon } };
   }, [hover, tool, rotation, pipeline]);
 
+  // The clipboard following the cursor while pasting; cells in the way are marked red.
+  const pasteGhost = useMemo(() => {
+    if (tool?.type !== 'paste' || !clipboard || !hover) return null;
+    const at = pasteAnchor(clipboard, hover);
+    const nodes = clipboard.nodes.map((n) => ({ ...n, x: n.x + at.x, y: n.y + at.y }));
+    const tiles = clipboard.tiles.map((t) => ({ ...t, x: t.x + at.x, y: t.y + at.y }));
+    const inflow = ops.tileInflow({ nodes, belts: tiles } as Pipeline);
+    const blocked = ops.clipCells(clipboard, at).filter((c) => occupancy.has(cellKey(c.x, c.y)));
+    return { nodes, tiles, inflow, blocked };
+  }, [tool, clipboard, hover, occupancy]);
+
   const previewTiles = useMemo(() => {
     const cells = ghost?.belt;
     if (!cells) return null;
@@ -608,6 +631,19 @@ export function Canvas() {
             />
           )}
           {previewTiles && <BeltTiles tiles={previewTiles.tiles} inflow={previewTiles.inflow} className="belt-ghost" />}
+          {pasteGhost && (
+            <g className="paste-ghost">
+              <BeltTiles tiles={pasteGhost.tiles} inflow={pasteGhost.inflow} className="belt-ghost" />
+              <g className="ghost-building">
+                {pasteGhost.nodes.map((n) => (
+                  <BuildingArt key={n.id} kind={n.kind} cells={nodeCells(n)} rotation={n.rotation} color={n.color} icon={n.icon} />
+                ))}
+              </g>
+              {pasteGhost.blocked.map((c) => (
+                <rect key={`${c.x},${c.y}`} className="ghost-block" x={c.x * CELL} y={c.y * CELL} width={CELL} height={CELL} rx={7} />
+              ))}
+            </g>
+          )}
           {ghost?.building && (
             <g className={`ghost-building${ghost.building.valid ? '' : ' invalid'}`}>
               <BuildingArt kind={ghost.building.kind} cells={[ghost.building.at]} rotation={rotation} color={ghost.building.color} icon={ghost.building.icon} />

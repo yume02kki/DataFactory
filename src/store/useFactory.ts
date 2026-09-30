@@ -30,6 +30,8 @@ export interface FactoryState {
   tool: Tool | null;
   /** Rotation used for the next building or belt tile placed. */
   rotation: Dir;
+  /** The last copied or cut selection. */
+  clipboard: ops.Clip | null;
   /** Set while the user drags a box to choose what to export. */
   exportArea: { format: 'png' | 'gif'; grid: boolean } | null;
 
@@ -47,6 +49,13 @@ export interface FactoryState {
   clearSelection: () => void;
 
   setTool: (tool: Tool | null) => void;
+  /** Copies the selection to the clipboard. Returns false when nothing is selected. */
+  copySelection: () => boolean;
+  cutSelection: () => void;
+  /** Picks up the clipboard as the paste tool. */
+  startPaste: () => void;
+  /** Places the clipboard with its top-left at `at`; the paste tool stays out for more. */
+  pasteAt: (at: Pt) => boolean;
   /** Pipette (Q / middle click): the building or belt on this cell becomes the build tool. */
   pickAt: (cell: Pt) => void;
   setExportArea: (area: FactoryState['exportArea']) => void;
@@ -108,6 +117,7 @@ export const useFactory = create<FactoryState>()((set, get) => {
     tool: null,
     rotation: 0,
     exportArea: null,
+    clipboard: null,
 
     loadPipeline: (p) =>
       set({ pipeline: p, view: p.view, selection: EMPTY_SELECTION, past: [], future: [], lastEdit: null, highlightItem: null, tool: null }),
@@ -177,6 +187,56 @@ export const useFactory = create<FactoryState>()((set, get) => {
 
     setTool: (tool) => set({ tool, exportArea: null }),
 
+    copySelection: () => {
+      const { selection, pipeline } = get();
+      let tiles = selection.tiles;
+      // A selected belt line copies all of its tiles.
+      if (!selection.nodes.length && !tiles.length && selection.belt) {
+        const link = ops.traceLinks(pipeline).find((l) => l.tiles.some((t) => t.id === selection.belt));
+        tiles = link ? link.tiles.map((t) => t.id) : [selection.belt];
+      }
+      const clip = ops.copySelection(pipeline, selection.nodes, tiles);
+      if (!clip) {
+        get().notify('Select something to copy (Shift or Ctrl + drag)');
+        return false;
+      }
+      set({ clipboard: clip });
+      const parts = [clip.nodes.length && `${clip.nodes.length} building${clip.nodes.length === 1 ? '' : 's'}`, clip.tiles.length && `${clip.tiles.length} belt tile${clip.tiles.length === 1 ? '' : 's'}`].filter(Boolean);
+      get().notify(`Copied ${parts.join(' and ')} · Ctrl V to paste`);
+      return true;
+    },
+
+    cutSelection: () => {
+      if (!get().copySelection()) return;
+      get().deleteSelection();
+      get().notify('Cut · Ctrl V to paste');
+    },
+
+    startPaste: () => {
+      if (!get().clipboard) {
+        get().notify('Nothing copied yet (Ctrl C)');
+        return;
+      }
+      set({ tool: { type: 'paste' }, exportArea: null });
+    },
+
+    pasteAt: (at) => {
+      const clip = get().clipboard;
+      if (!clip) return false;
+      let ids: { nodes: string[]; tiles: string[] } | null = null;
+      if (!ops.canPaste(get().pipeline, clip, at)) {
+        get().notify('Something is in the way');
+        return false;
+      }
+      get().edit((p) => {
+        ids = ops.pasteClip(p, clip, at);
+        ops.syncLinkItems(p);
+      });
+      const placed = ids as { nodes: string[]; tiles: string[] } | null;
+      if (placed) set({ selection: { ...EMPTY_SELECTION, nodes: placed.nodes, tiles: placed.tiles } });
+      return !!placed;
+    },
+
     pickAt: (cell) => {
       const occ = ops.occupancy(get().pipeline).get(cellKey(cell.x, cell.y));
       if (occ?.node) {
@@ -196,6 +256,10 @@ export const useFactory = create<FactoryState>()((set, get) => {
 
     rotate: (steps, hoverCell) => {
       const { tool, selection, pipeline } = get();
+      if (tool?.type === 'paste' && get().clipboard) {
+        set({ clipboard: ops.rotateClip(get().clipboard!, steps) });
+        return;
+      }
       if (tool) {
         set({ rotation: rotateDir(get().rotation, steps) });
         return;

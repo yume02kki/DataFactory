@@ -1188,6 +1188,14 @@ select:focus {
   justify-content: center;
 }
 
+.insp-actions.wrap {
+  flex-wrap: wrap;
+}
+
+.insp-actions.wrap .btn {
+  flex: 1 1 calc(50% - 4px);
+}
+
 .belt-route {
   display: flex;
   align-items: center;

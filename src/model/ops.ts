@@ -16,7 +16,7 @@ import {
   type Pt,
 } from './geometry';
 import { uid } from './ids';
-import type { BeltTile, CombineMode, Dir, FactoryNode, ItemLayer, ItemType, Pipeline } from './types';
+import type { Arrow, BeltTile, CombineMode, Dir, FactoryNode, ItemLayer, ItemType, Pipeline } from './types';
 
 /**
  * Pure (draft-mutating) grid operations shared by the store, canvas and tests.
@@ -598,4 +598,116 @@ export function connectedPorts(p: Pipeline): Map<string, Set<string>> {
     out.set(n.id, used);
   }
   return out;
+}
+
+/* ---------- copy / cut / paste ---------- */
+
+/**
+ * A copied piece of factory: buildings, belt tiles, the arrows between the
+ * buildings, and the item types they use, all positioned relative to the
+ * top-left of the piece (w × h cells).
+ */
+export interface Clip {
+  nodes: FactoryNode[];
+  tiles: BeltTile[];
+  arrows: Arrow[];
+  items: ItemType[];
+  w: number;
+  h: number;
+}
+
+/** Every cell a clip covers when its top-left is at `at`. */
+export function clipCells(clip: Clip, at: Pt): Pt[] {
+  return [
+    ...clip.nodes.flatMap((n) => nodeCells(n).map((c) => ({ x: c.x + at.x, y: c.y + at.y }))),
+    ...clip.tiles.map((t) => ({ x: t.x + at.x, y: t.y + at.y })),
+  ];
+}
+
+/** Shifts a clip so it starts at (0, 0) and records its size. */
+function normalizeClip(clip: Omit<Clip, 'w' | 'h'>): Clip {
+  const cells = [...clip.nodes.flatMap((n) => nodeCells(n)), ...clip.tiles];
+  const minX = Math.min(...cells.map((c) => c.x));
+  const minY = Math.min(...cells.map((c) => c.y));
+  const maxX = Math.max(...cells.map((c) => c.x));
+  const maxY = Math.max(...cells.map((c) => c.y));
+  return {
+    ...clip,
+    nodes: clip.nodes.map((n) => ({ ...n, x: n.x - minX, y: n.y - minY })),
+    tiles: clip.tiles.map((t) => ({ ...t, x: t.x - minX, y: t.y - minY })),
+    w: maxX - minX + 1,
+    h: maxY - minY + 1,
+  };
+}
+
+/** Copies the given buildings and belt tiles (plus arrows between those buildings). */
+export function copySelection(p: Pipeline, nodeIds: string[], tileIds: string[]): Clip | null {
+  const nodes = p.nodes.filter((n) => nodeIds.includes(n.id));
+  const tiles = p.belts.filter((t) => tileIds.includes(t.id));
+  if (!nodes.length && !tiles.length) return null;
+  const ids = new Set(nodes.map((n) => n.id));
+  const arrows = p.arrows.filter((a) => ids.has(a.from) && ids.has(a.to));
+  const used = new Set([...nodes.flatMap((n) => [...n.inputs, ...n.outputs]), ...tiles.map((t) => t.itemId).filter((x): x is string => !!x)]);
+  const items = p.items.filter((i) => used.has(i.id));
+  return normalizeClip(structuredClone({ nodes, tiles, arrows, items }));
+}
+
+/** A clip turned a quarter turn clockwise per step, buildings and belts included. */
+export function rotateClip(clip: Clip, steps: number): Clip {
+  const n = ((steps % 4) + 4) % 4;
+  let out: Clip = clip;
+  for (let i = 0; i < n; i++) {
+    // (x, y) → (-y, x) turns clockwise on screen; normalizing afterwards shifts it back into place.
+    const nodes = out.nodes.map((node) => {
+      const turned = { ...node, rotation: rotateDir(node.rotation, 1), cells: node.cells.map((c) => [c[0], c[1]] as [number, number]) };
+      setNodeCells(turned, nodeCells(node).map((c) => ({ x: -c.y, y: c.x })));
+      return turned;
+    });
+    const tiles = out.tiles.map((t) => ({ ...t, x: -t.y, y: t.x, dir: rotateDir(t.dir, 1) }));
+    out = normalizeClip({ ...out, nodes, tiles });
+  }
+  return out;
+}
+
+/** Whether the clip fits with its top-left at `at`. */
+export function canPaste(p: Pipeline, clip: Clip, at: Pt): boolean {
+  return canPlaceCells(p, clipCells(clip, at));
+}
+
+/**
+ * Places a copy of the clip with its top-left at `at`: fresh ids, buildings
+ * renamed if their name is taken, arrows reconnected, missing item types added.
+ * Returns the new ids (to select them), or null when something is in the way.
+ */
+export function pasteClip(p: Pipeline, clip: Clip, at: Pt): { nodes: string[]; tiles: string[] } | null {
+  if (!canPaste(p, clip, at)) return null;
+  const haveItems = new Set(p.items.map((i) => i.id));
+  for (const item of clip.items) if (!haveItems.has(item.id)) p.items.push(structuredClone(item));
+  const idMap = new Map<string, string>();
+  const nodes: string[] = [];
+  for (const n of clip.nodes) {
+    const copy: FactoryNode = {
+      ...structuredClone(n),
+      id: uid('node'),
+      name: copyName(p, n.name),
+      x: n.x + at.x,
+      y: n.y + at.y,
+      metadata: n.metadata.map((m) => ({ ...m, id: uid('m') })),
+    };
+    idMap.set(n.id, copy.id);
+    nodes.push(copy.id);
+    p.nodes.push(copy);
+  }
+  const tiles: string[] = [];
+  for (const t of clip.tiles) {
+    const copy = { ...t, id: uid('belt'), x: t.x + at.x, y: t.y + at.y };
+    tiles.push(copy.id);
+    p.belts.push(copy);
+  }
+  for (const a of clip.arrows) {
+    const from = idMap.get(a.from);
+    const to = idMap.get(a.to);
+    if (from && to) p.arrows.push({ ...a, id: uid('arrow'), from, to });
+  }
+  return { nodes, tiles };
 }

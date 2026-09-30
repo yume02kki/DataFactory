@@ -430,8 +430,17 @@ function MultiInspector({ nodeIds, tileIds, pipeline }: { nodeIds: string[]; til
           ) : null;
         })}
       </div>
-      <p className="muted small">Drag any selected building or belt to move the whole group. R rotates the selected buildings; duplicating copies belts too.</p>
-      <div className="insp-actions">
+      <p className="muted small">
+        Drag any selected building or belt to move the whole group. Copy or cut it, then <kbd>Ctrl V</kbd> to place copies: <kbd>R</kbd> rotates the copy
+        and each click stamps another.
+      </p>
+      <div className="insp-actions wrap">
+        <button className="btn" onClick={() => useFactory.getState().copySelection()}>
+          Copy <kbd>Ctrl C</kbd>
+        </button>
+        <button className="btn" onClick={() => useFactory.getState().cutSelection()}>
+          Cut <kbd>Ctrl X</kbd>
+        </button>
         <button className="btn" onClick={() => useFactory.getState().duplicateSelection()}>
           Duplicate <kbd>Ctrl D</kbd>
         </button>

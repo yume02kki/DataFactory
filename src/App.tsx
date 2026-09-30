@@ -80,6 +80,15 @@ export default function App() {
       } else if (mod && key === 'y') {
         e.preventDefault();
         s.redo();
+      } else if (mod && key === 'c') {
+        e.preventDefault();
+        s.copySelection();
+      } else if (mod && key === 'x') {
+        e.preventDefault();
+        s.cutSelection();
+      } else if (mod && key === 'v') {
+        e.preventDefault();
+        s.startPaste();
       } else if (mod && key === 'd') {
         e.preventDefault();
         s.duplicateSelection();
