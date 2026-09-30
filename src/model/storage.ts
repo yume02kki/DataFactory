@@ -1,8 +1,8 @@
-import { KIND_META, NODE_KINDS, ITEM_SHAPES, starterBlueprints } from './defaults';
+import { ARROW_COLOR, KIND_META, NODE_KINDS, ITEM_SHAPES, starterBlueprints } from './defaults';
 import { uid } from './ids';
 import { inputCells, lPath, normalizeOffsets, outputCells } from './geometry';
 import { applyRecipes, paintBelt } from './ops';
-import type { BeltTile, Blueprint, CombineMode, Dir, FactoryNode, ItemType, Pipeline } from './types';
+import type { Arrow, BeltTile, Blueprint, CombineMode, Dir, FactoryNode, ItemType, Pipeline } from './types';
 
 const LIBRARY_KEY = 'datafactory.library.v1';
 const CURRENT_KEY = 'datafactory.current.v1';
@@ -175,6 +175,7 @@ export function normalizePipeline(input: unknown): Pipeline {
     blueprints,
     nodes,
     belts: draft.belts,
+    arrows: readArrows(raw, new Set(nodes.map((n) => n.id))),
     view: { x: num(view.x), y: num(view.y), zoom: Math.min(2.5, Math.max(0.2, num(view.zoom, 1))) },
     createdAt: num(raw.createdAt, now),
     updatedAt: num(raw.updatedAt, now),
@@ -224,6 +225,29 @@ function readCells(o: Record<string, unknown>, rotation: Dir): Array<[number, nu
   if (raw.length) return normalizeOffsets(raw.slice(0, 1024)).cells;
   const size = Math.max(1, Math.min(64, Math.round(num(o.size, 1))));
   return Array.from({ length: size }, (_, i) => (rotation % 2 === 0 ? [0, i] : [i, 0]) as [number, number]);
+}
+
+/** Arrows between buildings; ones pointing at missing buildings, or duplicates, are dropped. */
+function readArrows(raw: Record<string, unknown>, nodeIds: Set<string>): Arrow[] {
+  const seen = new Set<string>();
+  return arr(raw.arrows)
+    .map((v) => obj(v))
+    .filter((o) => {
+      const from = str(o.from);
+      const to = str(o.to);
+      const key = `${from}>${to}`;
+      if (!nodeIds.has(from) || !nodeIds.has(to) || from === to || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((o) => ({
+      id: str(o.id) || uid('arrow'),
+      from: str(o.from),
+      to: str(o.to),
+      label: str(o.label),
+      color: str(o.color, ARROW_COLOR),
+      dashed: o.dashed === true,
+    }));
 }
 
 export function downloadPipeline(p: Pipeline): void {

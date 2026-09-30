@@ -53,6 +53,9 @@ export const KIND_META: Record<NodeKind, KindMeta> = {
   },
 };
 
+/** Default colour for link arrows: stands apart from belts and buildings. */
+export const ARROW_COLOR = '#ef5072';
+
 export const ITEM_SHAPES: ItemShape[] = ['circle', 'square', 'diamond', 'triangle', 'hexagon', 'star'];
 
 /** A restrained, colourful palette used for items and custom buildings. */
@@ -148,6 +151,7 @@ export function blankPipeline(name = 'Untitled factory'): Pipeline {
     blueprints: starterBlueprints(),
     nodes: [],
     belts: [],
+    arrows: [],
     view: { x: 0, y: 0, zoom: 1 },
     createdAt: now,
     updatedAt: now,

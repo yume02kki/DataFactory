@@ -382,3 +382,37 @@ describe('combining item looks', () => {
     expect(again.items[2].layers).toEqual([{ shape: 'star', color: '#ff666a' }]);
   });
 });
+
+describe('link arrows', () => {
+  it('lets one building point at many, once each', () => {
+    const { p, src, mac, sto } = tinyFactory();
+    expect(ops.addArrow(p, src.id, mac.id).ok).toBe(true);
+    expect(ops.addArrow(p, src.id, sto.id).ok).toBe(true);
+    expect(ops.addArrow(p, src.id, mac.id)).toEqual({ ok: false, reason: 'Those are already linked' });
+    expect(ops.addArrow(p, src.id, src.id).ok).toBe(false);
+    expect(ops.addArrow(p, mac.id, src.id).ok).toBe(true); // the other direction is a different arrow
+    expect(p.arrows).toHaveLength(3);
+  });
+
+  it('disappear with their buildings and copy along with them', () => {
+    const { p, src, mac, sto } = tinyFactory();
+    ops.addArrow(p, src.id, mac.id);
+    ops.addArrow(p, src.id, sto.id);
+    const ids = ops.duplicate(p, [src.id, mac.id], [], 0, 5);
+    expect(p.arrows).toHaveLength(3);
+    expect(p.arrows[2]).toMatchObject({ from: ids.nodes[0], to: ids.nodes[1] });
+    ops.removeNodes(p, [src.id]);
+    expect(p.arrows).toHaveLength(1);
+  });
+
+  it('survive save and load, dropping broken ones', () => {
+    const { p, src, mac } = tinyFactory();
+    ops.addArrow(p, src.id, mac.id);
+    p.arrows[0].label = 'reads from';
+    const raw = JSON.parse(JSON.stringify(p));
+    raw.arrows.push({ from: src.id, to: 'ghost' }, { from: src.id, to: mac.id });
+    const again = normalizePipeline(raw);
+    expect(again.arrows).toHaveLength(1);
+    expect(again.arrows[0]).toMatchObject({ from: src.id, to: mac.id, label: 'reads from', dashed: false });
+  });
+});

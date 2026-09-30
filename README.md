@@ -82,7 +82,7 @@ It plays like shapez.io: pick a tool, left-click to build, right-click to destro
 
 | Action | How |
 | --- | --- |
-| Pick a tool | Hotbar at the bottom: `1` Belt, `2` Source, `3` Machine, `4` Buffer, `5` Store. Clicking a palette tile picks that component type |
+| Pick a tool | Hotbar at the bottom: `1` Belt, `2` Source, `3` Machine, `4` Buffer, `5` Store, `6` Link. Clicking a palette tile picks that component type |
 | Build | Left-click the floor, or left-drag to paint blocks. Matching blocks that touch join into one building of any shape. A ghost shows where it will go and turns red when something is in the way |
 | Rotate | `R` / `Shift R` rotates the tool, the selected buildings, or the belt under the cursor |
 | Lay belts | With the belt tool, left-drag. Belts follow an L-shaped path and point the way you drag |
@@ -100,6 +100,15 @@ It plays like shapez.io: pick a tool, left-click to build, right-click to destro
 | Pause the animation | `P` or **Pause flow** |
 
 Press `?` in the app for the full list.
+
+## Links
+
+Some relationships aren't items on a belt: a service that *reads from* a queue
+and a bucket, or a lookup. The **Link** tool (`6`, the arrow in the hotbar) draws
+these as arrows. Drag from one building onto another. A building can point at as
+many others as you like. Click an arrow to give it a label (e.g. "reads from"),
+change its colour, make it dashed or flip its direction. Right-click an arrow to
+delete it. A building's inspector lists the arrows to and from it.
 
 ## Exporting images
 

@@ -9,7 +9,7 @@ import { KIND_META, NODE_KINDS, examplePipeline } from './model/defaults';
 import * as storage from './model/storage';
 import { useFactory } from './store/useFactory';
 import { fitToView, pointer, zoomBy } from './lib/viewport';
-import { BELT_HOTKEY, Hotbar } from './components/Hotbar';
+import { BELT_HOTKEY, Hotbar, LINK_HOTKEY } from './components/Hotbar';
 import { CELL, cellKey } from './model/geometry';
 import * as ops from './model/ops';
 
@@ -153,6 +153,8 @@ export default function App() {
         s.setView({ ...s.view, x: s.view.x + dx, y: s.view.y + dy });
       } else if (key === BELT_HOTKEY) {
         s.setTool(s.tool?.type === 'belt' ? null : { type: 'belt' });
+      } else if (key === LINK_HOTKEY) {
+        s.setTool(s.tool?.type === 'link' ? null : { type: 'link' });
       } else {
         const kind = NODE_KINDS.find((k) => KIND_META[k].hotkey === key);
         if (kind) {

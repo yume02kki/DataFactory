@@ -1701,3 +1701,73 @@ select:focus {
   stroke: var(--ink);
   stroke-width: 1.6;
 }
+
+/* ---------- link arrows ---------- */
+
+.arrow {
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.arrow.dimmed {
+  opacity: 0.3;
+}
+
+.arrow-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 16;
+}
+
+.arrow-line {
+  fill: none;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.arrow-head {
+  stroke: none;
+}
+
+.arrow-glow {
+  fill: none;
+  stroke: var(--select);
+  stroke-width: 9;
+  stroke-opacity: 0.35;
+  stroke-linecap: round;
+}
+
+.arrow-label rect {
+  fill: var(--panel-solid);
+  stroke-width: 1.5;
+}
+
+.arrow-label text {
+  fill: var(--text);
+}
+
+.arrow-preview {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.arrow-preview.valid {
+  opacity: 1;
+}
+
+.link-icon .li-block {
+  fill: var(--plate);
+  stroke: var(--ink);
+  stroke-width: 1.8;
+}
+
+.link-icon .li-line {
+  fill: none;
+  stroke: #ef5072;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.link-icon .li-head {
+  fill: #ef5072;
+}

@@ -4,6 +4,7 @@ import { KindIcon } from './KindIcon';
 const CONTROLS: Array<[string, string]> = [
   ['1', 'Belt tool: left-drag to lay a conveyor'],
   ['2 · 3 · 4 · 5', 'Source / machine / buffer / store tool'],
+  ['6', 'Link tool: drag from one building onto another to draw an arrow'],
   ['Palette tile', 'Build that component type'],
   ['Left click · drag', 'Build with the active tool; drag to paint blocks into any shape'],
   ['Right click · drag', 'Destroy what is under the cursor'],

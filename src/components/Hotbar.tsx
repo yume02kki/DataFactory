@@ -4,6 +4,18 @@ import { useFactory } from '../store/useFactory';
 import { KindIcon } from './KindIcon';
 
 export const BELT_HOTKEY = '1';
+export const LINK_HOTKEY = '6';
+
+export function LinkIcon({ size = 34 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden className="link-icon">
+      <rect x="3" y="19" width="9" height="9" rx="2.5" className="li-block" />
+      <rect x="20" y="4" width="9" height="9" rx="2.5" className="li-block" />
+      <path d="M 10 18 Q 11 9 18.5 9.5" className="li-line" />
+      <path d="M 21 9.6 L 16.6 6.2 L 16.8 12.6 Z" className="li-head" />
+    </svg>
+  );
+}
 
 export function BeltIcon({ size = 34 }: { size?: number }) {
   return (
@@ -18,6 +30,7 @@ export function BeltIcon({ size = 34 }: { size?: number }) {
 function toolLabel(tool: Tool | null, blueprintName?: string): string {
   if (!tool) return '';
   if (tool.type === 'belt') return 'Belt';
+  if (tool.type === 'link') return 'Link';
   return tool.template?.name ?? blueprintName ?? KIND_META[tool.kind].label;
 }
 
@@ -34,12 +47,20 @@ export function Hotbar() {
       {tool && (
         <div className="tool-hint">
           <b>{toolLabel(tool, blueprintName)}</b>
-          <span className="rot" style={{ transform: `rotate(${rotation * 90}deg)` }}>
-            ➜
-          </span>
-          <span>
-            <kbd>Left</kbd> build · <kbd>R</kbd> rotate · <kbd>Right</kbd> destroy / cancel · <kbd>Q</kbd> pick
-          </span>
+          {tool.type !== 'link' && (
+            <span className="rot" style={{ transform: `rotate(${rotation * 90}deg)` }}>
+              ➜
+            </span>
+          )}
+          {tool.type === 'link' ? (
+            <span>
+              Drag from a building onto another · <kbd>Right</kbd> on an arrow deletes it · <kbd>Esc</kbd> done
+            </span>
+          ) : (
+            <span>
+              <kbd>Left</kbd> build · <kbd>R</kbd> rotate · <kbd>Right</kbd> destroy / cancel · <kbd>Q</kbd> pick
+            </span>
+          )}
         </div>
       )}
       <div className="panel hotbar" role="toolbar" aria-label="Build tools">
@@ -61,6 +82,14 @@ export function Hotbar() {
             </button>
           );
         })}
+        <button
+          className={`hot-slot${tool?.type === 'link' ? ' active' : ''}`}
+          onClick={() => setTool(tool?.type === 'link' ? null : { type: 'link' })}
+          title="Link — drag from one building onto another to draw an arrow (e.g. reads from)"
+        >
+          <LinkIcon />
+          <kbd>{LINK_HOTKEY}</kbd>
+        </button>
       </div>
     </div>
   );

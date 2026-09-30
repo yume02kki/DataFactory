@@ -109,6 +109,19 @@ export interface BeltTile {
   description: string;
 }
 
+/**
+ * A drawn arrow between two buildings for relationships that aren't item flow,
+ * e.g. "reads from" or "looks up". One building can point at many.
+ */
+export interface Arrow {
+  id: string;
+  from: string;
+  to: string;
+  label: string;
+  color: string;
+  dashed: boolean;
+}
+
 export interface Viewport {
   x: number;
   y: number;
@@ -123,6 +136,7 @@ export interface Pipeline {
   blueprints: Blueprint[];
   nodes: FactoryNode[];
   belts: BeltTile[];
+  arrows: Arrow[];
   view: Viewport;
   createdAt: number;
   updatedAt: number;
@@ -134,10 +148,12 @@ export interface Selection {
   tiles: string[];
   /** A belt tile whose belt line is shown in the inspector. */
   belt: string | null;
+  arrow: string | null;
   item: string | null;
 }
 
 /** What a left click does on the floor. `null` is plain select / move. */
 export type Tool =
   | { type: 'belt' }
+  | { type: 'link' }
   | { type: 'building'; kind: NodeKind; blueprintId: string | null; template?: Partial<FactoryNode> };

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { ITEM_SHAPES, KIND_META, SWATCHES } from '../model/defaults';
+import { ARROW_COLOR, ITEM_SHAPES, KIND_META, SWATCHES } from '../model/defaults';
 import { uid } from '../model/ids';
 import * as ops from '../model/ops';
-import type { CombineMode, FactoryNode, ItemType, Pipeline } from '../model/types';
-import { BeltIcon } from './Hotbar';
+import type { Arrow, CombineMode, FactoryNode, ItemType, Pipeline } from '../model/types';
+import { BeltIcon, LinkIcon } from './Hotbar';
 import { inputCells, outputCells } from '../model/geometry';
 import { useFactory } from '../store/useFactory';
 import { ItemIcon } from './ItemGlyph';
@@ -28,13 +28,24 @@ export function Inspector() {
     const tile = pipeline.belts.find((t) => t.id === selection.belt);
     const link = links.find((l) => l.tiles.some((t) => t.id === selection.belt));
     if (tile) body = <BeltInspector key={link?.id ?? tile.id} tileId={tile.id} link={link} pipeline={pipeline} />;
+  } else if (selection.arrow) {
+    const arrow = pipeline.arrows.find((a) => a.id === selection.arrow);
+    if (arrow) body = <ArrowInspector key={arrow.id} arrow={arrow} pipeline={pipeline} />;
   } else if (selection.item) {
     const item = pipeline.items.find((i) => i.id === selection.item);
     if (item) body = <ItemInspector key={item.id} item={item} pipeline={pipeline} links={links} />;
   }
   if (!body) return null;
   return (
-    <aside className="panel inspector" aria-label="Inspector" onKeyDown={(e) => e.stopPropagation()}>
+    <aside
+      className="panel inspector"
+      aria-label="Inspector"
+      onKeyDown={(e) => {
+        // Keys typed into fields stay there; Esc leaves the field so hotkeys work again.
+        if (e.key === 'Escape') (e.target as HTMLElement).blur?.();
+        e.stopPropagation();
+      }}
+    >
       {body}
     </aside>
   );
@@ -236,6 +247,8 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
       { coalesce: `${node.id}:${String(key)}` },
     );
   const incoming = links.filter((l) => l.to === node.id);
+  const arrowsOut = pipeline.arrows.filter((a) => a.from === node.id);
+  const arrowsIn = pipeline.arrows.filter((a) => a.to === node.id);
   const outgoing = links.filter((l) => l.from === node.id);
   const nameOf = (id: string) => pipeline.nodes.find((n) => n.id === id)?.name ?? '?';
 
@@ -354,9 +367,15 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
         ))}
       </Section>
 
-      {(incoming.length > 0 || outgoing.length > 0) && (
+      {(incoming.length > 0 || outgoing.length > 0 || arrowsOut.length > 0 || arrowsIn.length > 0) && (
         <Section title="Connections">
           <div className="conn-list">
+            {arrowsOut.map((a) => (
+              <ArrowRow key={a.id} arrow={a} text={`points at ${nameOf(a.to)}`} />
+            ))}
+            {arrowsIn.map((a) => (
+              <ArrowRow key={a.id} arrow={a} text={`${nameOf(a.from)} points here`} />
+            ))}
             {incoming.map((l) => (
               <ConnRow key={l.id} tileId={l.id} dir="in" other={nameOf(l.from)} item={l.itemId ? itemsById.get(l.itemId) : undefined} />
             ))}
@@ -500,6 +519,87 @@ function BeltInspector({ tileId, link, pipeline }: { tileId: string; link?: ops.
       <div className="insp-actions">
         <button className="btn danger" onClick={() => useFactory.getState().deleteSelection()}>
           Remove belt <kbd>Del</kbd>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- arrows ---------- */
+
+function ArrowRow({ arrow, text }: { arrow: Arrow; text: string }) {
+  return (
+    <button className="conn-row" onClick={() => useFactory.getState().select({ arrow: arrow.id })}>
+      <span className="conn-dir" style={{ color: arrow.color }}>
+        ➜
+      </span>
+      <span className="conn-name">{text}</span>
+      {arrow.label && <span className="muted small">{arrow.label}</span>}
+    </button>
+  );
+}
+
+function ArrowInspector({ arrow, pipeline }: { arrow: Arrow; pipeline: Pipeline }) {
+  const from = pipeline.nodes.find((n) => n.id === arrow.from);
+  const to = pipeline.nodes.find((n) => n.id === arrow.to);
+  if (!from || !to) return null;
+  const set = <K extends keyof Arrow>(key: K, value: Arrow[K], coalesce = false) =>
+    edit(
+      (p) => {
+        const a = p.arrows.find((x) => x.id === arrow.id);
+        if (a) a[key] = value;
+      },
+      coalesce ? { coalesce: `${arrow.id}:${String(key)}` } : {},
+    );
+  const reversed = pipeline.arrows.some((a) => a.from === arrow.to && a.to === arrow.from);
+  return (
+    <div className="insp-body">
+      <Header icon={<LinkIcon size={34} />} eyebrow="Link" title={arrow.label || `${from.name} → ${to.name}`} />
+      <div className="belt-route">
+        <button className="route-end" onClick={() => useFactory.getState().selectNodes([from.id])}>
+          <KindIcon kind={from.kind} color={from.color} size={24} />
+          <span>{from.name}</span>
+        </button>
+        <span className="route-arrow" style={{ color: arrow.color }}>
+          ➜
+        </span>
+        <button className="route-end" onClick={() => useFactory.getState().selectNodes([to.id])}>
+          <KindIcon kind={to.kind} color={to.color} size={24} />
+          <span>{to.name}</span>
+        </button>
+      </div>
+      <Field label="Label" hint="optional">
+        <input value={arrow.label} placeholder="e.g. reads from, looks up, triggers" onChange={(e) => set('label', e.target.value, true)} />
+      </Field>
+      <Field label="Colour">
+        <Swatches value={arrow.color} first={ARROW_COLOR} onChange={(c) => set('color', c)} />
+      </Field>
+      <Field label="Line">
+        <div className="segmented">
+          <button className={arrow.dashed ? '' : 'on'} onClick={() => set('dashed', false)}>
+            Solid
+          </button>
+          <button className={arrow.dashed ? 'on' : ''} onClick={() => set('dashed', true)}>
+            Dashed
+          </button>
+        </div>
+      </Field>
+      <div className="insp-actions">
+        <button
+          className="btn"
+          disabled={reversed}
+          title={reversed ? 'An arrow already points the other way' : 'Point the arrow the other way'}
+          onClick={() =>
+            edit((p) => {
+              const a = p.arrows.find((x) => x.id === arrow.id);
+              if (a) [a.from, a.to] = [a.to, a.from];
+            })
+          }
+        >
+          ⇄ Flip
+        </button>
+        <button className="btn danger" onClick={() => useFactory.getState().deleteSelection()}>
+          Delete <kbd>Del</kbd>
         </button>
       </div>
     </div>

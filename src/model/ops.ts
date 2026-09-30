@@ -1,4 +1,4 @@
-import { KIND_META } from './defaults';
+import { ARROW_COLOR, KIND_META } from './defaults';
 import {
   CELL,
   DV,
@@ -156,6 +156,25 @@ export function eraseCell(p: Pipeline, x: number, y: number): 'node' | 'tile' | 
 export function removeNodes(p: Pipeline, ids: string[]) {
   const set = new Set(ids);
   p.nodes = p.nodes.filter((n) => !set.has(n.id));
+  p.arrows = p.arrows.filter((a) => !set.has(a.from) && !set.has(a.to));
+}
+
+/* ---------- link arrows ---------- */
+
+export type ArrowResult = { ok: true; id: string } | { ok: false; reason: string };
+
+/** Adds an arrow between two buildings (one building may point at many). */
+export function addArrow(p: Pipeline, from: string, to: string, color = ARROW_COLOR): ArrowResult {
+  if (from === to) return { ok: false, reason: 'Pick another building to point at' };
+  if (!p.nodes.some((n) => n.id === from) || !p.nodes.some((n) => n.id === to)) return { ok: false, reason: 'Missing building' };
+  if (p.arrows.some((a) => a.from === from && a.to === to)) return { ok: false, reason: 'Those are already linked' };
+  const arrow = { id: uid('arrow'), from, to, label: '', color, dashed: false };
+  p.arrows.push(arrow);
+  return { ok: true, id: arrow.id };
+}
+
+export function removeArrow(p: Pipeline, id: string) {
+  p.arrows = p.arrows.filter((a) => a.id !== id);
 }
 
 export function removeTiles(p: Pipeline, ids: string[]) {
@@ -385,6 +404,10 @@ export function duplicate(p: Pipeline, nodeIds: string[], tileIds: string[], dx:
     if (originals.length === 1) copy.name = copyName(p, n.name);
     nodes.push(copy.id);
     p.nodes.push(copy);
+  }
+  const idMap = new Map(originals.map((n, i) => [n.id, nodes[i]]));
+  for (const ar of p.arrows.filter((x) => idMap.has(x.from) && idMap.has(x.to))) {
+    p.arrows.push({ ...ar, id: uid('arrow'), from: idMap.get(ar.from)!, to: idMap.get(ar.to)! });
   }
   for (const t of p.belts.filter((b) => tileIds.includes(b.id))) {
     const copy = { ...t, id: uid('belt'), x: t.x + dx, y: t.y + dy };

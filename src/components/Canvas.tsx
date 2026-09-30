@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KIND_META } from '../model/defaults';
+import { ARROW_COLOR, KIND_META } from '../model/defaults';
 import { CELL, cellKey, lPath, nodeRect, normalizeRect, rectsIntersect, type Pt, type Rect } from '../model/geometry';
 import * as ops from '../model/ops';
 import type { Dir, NodeKind } from '../model/types';
@@ -9,6 +9,7 @@ import { exportFactory, type ExportFormat } from '../lib/exportImage';
 import { BeltTiles, LinkItems } from './BeltView';
 import { NodeView } from './NodeView';
 import { BuildingArt } from './BuildingArt';
+import { ArrowPreview, ArrowView } from './ArrowView';
 
 export const DND_MIME = 'application/x-datafactory';
 
@@ -42,7 +43,14 @@ type Gesture =
       narrowOnClick: boolean;
     }
   | { type: 'marquee'; start: Pt; baseNodes: string[]; baseTiles: string[] }
-  | { type: 'exportArea'; start: Pt };
+  | { type: 'exportArea'; start: Pt }
+  | { type: 'link'; from: string };
+
+interface LinkPreview {
+  from: string;
+  to: Pt;
+  target: string | null;
+}
 
 const cellOf = (w: Pt): Pt => ({ x: Math.floor(w.x / CELL), y: Math.floor(w.y / CELL) });
 
@@ -71,6 +79,7 @@ export function Canvas() {
   const [hover, setHover] = useState<Pt | null>(null);
   const [paintPreview, setPaintPreview] = useState<Array<Pt & { dir: Dir }> | null>(null);
   const [marquee, setMarquee] = useState<Rect | null>(null);
+  const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
   const [panning, setPanning] = useState(false);
 
   const toWorld = useCallback((clientX: number, clientY: number): Pt => {
@@ -172,6 +181,17 @@ export function Canvas() {
       return;
     }
 
+    // Arrows float above the floor: right-click deletes one, left-click selects it (unless building).
+    const arrowId = (e.target as Element).closest('[data-arrow-id]')?.getAttribute('data-arrow-id');
+    if (arrowId && e.button === 2) {
+      state.edit((p) => ops.removeArrow(p, arrowId));
+      return;
+    }
+    if (arrowId && e.button === 0 && (!tool || tool.type === 'link')) {
+      state.select({ arrow: arrowId });
+      return;
+    }
+
     // Right mouse destroys whatever is under the cursor (drag to destroy more).
     if (e.button === 2) {
       state.checkpoint();
@@ -180,6 +200,19 @@ export function Canvas() {
       return;
     }
     if (e.button !== 0) return;
+
+    if (tool?.type === 'link') {
+      // Drag from one building onto another to point an arrow at it.
+      const from = occupancy.get(cellKey(cell.x, cell.y))?.node;
+      if (from) {
+        gesture.current = { type: 'link', from: from.id };
+        setLinkPreview({ from: from.id, to: world, target: null });
+      } else {
+        gesture.current = { type: 'pan', sx: e.clientX, sy: e.clientY, vx: state.view.x, vy: state.view.y, moved: false, clearOnClick: true };
+        setPanning(true);
+      }
+      return;
+    }
 
     if (tool?.type === 'belt') {
       gesture.current = { type: 'paint', start: cell, axis: null };
@@ -299,6 +332,12 @@ export function Canvas() {
       return;
     }
 
+    if (g.type === 'link') {
+      const target = occupancy.get(cellKey(cell.x, cell.y))?.node;
+      setLinkPreview({ from: g.from, to: world, target: target && target.id !== g.from ? target.id : null });
+      return;
+    }
+
     if (g.type === 'exportArea') {
       setMarquee(normalizeRect(g.start, world));
       return;
@@ -346,6 +385,21 @@ export function Canvas() {
       state.selectNodes([g.nodeId]);
     } else if (g.type === 'marquee') {
       setMarquee(null);
+    } else if (g.type === 'link') {
+      setLinkPreview(null);
+      const cell = cellOf(toWorld(e.clientX, e.clientY));
+      const target = ops.occupancy(state.pipeline).get(cellKey(cell.x, cell.y))?.node;
+      if (!target || target.id === g.from) return;
+      let result: ops.ArrowResult = { ok: false, reason: '' };
+      state.edit((p) => {
+        result = ops.addArrow(p, g.from, target.id);
+      });
+      const r = result as ops.ArrowResult;
+      if (r.ok) state.select({ arrow: r.id });
+      else {
+        useFactory.setState((s) => ({ past: s.past.slice(0, -1) }));
+        state.notify(r.reason);
+      }
     } else if (g.type === 'exportArea') {
       setMarquee(null);
       const area = state.exportArea;
@@ -403,6 +457,8 @@ export function Canvas() {
   const itemsById = useMemo(() => new Map(pipeline.items.map((i) => [i.id, i])), [pipeline.items]);
   const activeItem = highlightItem ?? selection.item;
 
+  const nodesById = useMemo(() => new Map(pipeline.nodes.map((n) => [n.id, n])), [pipeline.nodes]);
+
   const selectedTiles = useMemo(() => {
     const set = new Set(selection.tiles);
     if (selection.belt) {
@@ -426,6 +482,7 @@ export function Canvas() {
       if (paintPreview) return null;
       return { belt: [{ id: 'ghost', x: hover.x, y: hover.y, dir: rotation, itemId: null, description: '' }] };
     }
+    if (tool.type !== 'building') return null;
     const at = hover;
     const blueprint = tool.blueprintId ? pipeline.blueprints.find((b) => b.id === tool.blueprintId) : undefined;
     const color = tool.template?.color ?? blueprint?.color ?? KIND_META[tool.kind].color;
@@ -505,6 +562,31 @@ export function Canvas() {
               />
             ))}
           </g>
+          <g className="layer-arrows">
+            {pipeline.arrows.map((a) => {
+              const from = nodesById.get(a.from);
+              const to = nodesById.get(a.to);
+              if (!from || !to) return null;
+              return (
+                <ArrowView
+                  key={a.id}
+                  arrow={a}
+                  from={nodeRect(from)}
+                  to={nodeRect(to)}
+                  selected={selection.arrow === a.id}
+                  dimmed={!!activeItem}
+                />
+              );
+            })}
+          </g>
+          {linkPreview && nodesById.get(linkPreview.from) && (
+            <ArrowPreview
+              from={nodeRect(nodesById.get(linkPreview.from)!)}
+              to={linkPreview.target && nodesById.get(linkPreview.target) ? nodeRect(nodesById.get(linkPreview.target)!) : linkPreview.to}
+              color={ARROW_COLOR}
+              valid={!!linkPreview.target}
+            />
+          )}
           {previewTiles && <BeltTiles tiles={previewTiles.tiles} inflow={previewTiles.inflow} className="belt-ghost" />}
           {ghost?.building && (
             <g className={`ghost-building${ghost.building.valid ? '' : ' invalid'}`}>

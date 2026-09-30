@@ -9,7 +9,7 @@ import type { Blueprint, Dir, FactoryNode, ItemType, NodeKind, Pipeline, Selecti
 const HISTORY_LIMIT = 120;
 const COALESCE_MS = 1200;
 
-const EMPTY_SELECTION: Selection = { nodes: [], tiles: [], belt: null, item: null };
+const EMPTY_SELECTION: Selection = { nodes: [], tiles: [], belt: null, arrow: null, item: null };
 
 export interface Toast {
   id: number;
@@ -88,12 +88,13 @@ export const useFactory = create<FactoryState>()((set, get) => {
       nodes: sel.nodes.filter((id) => p.nodes.some((n) => n.id === id)),
       tiles: sel.tiles.filter((id) => tileIds.has(id)),
       belt: sel.belt && tileIds.has(sel.belt) ? sel.belt : null,
+      arrow: sel.arrow && p.arrows.some((a) => a.id === sel.arrow) ? sel.arrow : null,
       item: sel.item && p.items.some((i) => i.id === sel.item) ? sel.item : null,
     };
   };
 
   return {
-    pipeline: { id: '', name: '', description: '', items: [], blueprints: [], nodes: [], belts: [], view: { x: 0, y: 0, zoom: 1 }, createdAt: 0, updatedAt: 0 },
+    pipeline: { id: '', name: '', description: '', items: [], blueprints: [], nodes: [], belts: [], arrows: [], view: { x: 0, y: 0, zoom: 1 }, createdAt: 0, updatedAt: 0 },
     view: { x: 0, y: 0, zoom: 1 },
     selection: EMPTY_SELECTION,
     past: [],
@@ -240,6 +241,8 @@ export const useFactory = create<FactoryState>()((set, get) => {
           ops.removeNodes(p, selection.nodes);
           ops.removeTiles(p, selection.tiles);
         });
+      } else if (selection.arrow) {
+        get().edit((p) => ops.removeArrow(p, selection.arrow!));
       } else if (selection.belt) {
         const link = ops.traceLinks(pipeline).find((l) => l.tiles.some((t) => t.id === selection.belt));
         const ids = link ? link.tiles.map((t) => t.id) : [selection.belt];
