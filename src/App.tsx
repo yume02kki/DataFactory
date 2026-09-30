@@ -11,7 +11,7 @@ import * as storage from './model/storage';
 import { useFactory } from './store/useFactory';
 import { fitToView, pointer, zoomBy } from './lib/viewport';
 import { BELT_HOTKEY, Hotbar, LINK_HOTKEY } from './components/Hotbar';
-import { CELL, cellKey } from './model/geometry';
+import { CELL } from './model/geometry';
 import * as ops from './model/ops';
 
 function hoverCell() {
@@ -136,17 +136,8 @@ export default function App() {
       } else if (key === 'q') {
         // Pipette: pick up whatever is under the cursor as the build tool.
         const cell = hoverCell();
-        const occ = cell ? ops.occupancy(s.pipeline).get(cellKey(cell.x, cell.y)) : undefined;
-        if (occ?.node) {
-          const { name, type, technology, description, color, icon, inputs, outputs, metadata } = occ.node;
-          s.setTool({ type: 'building', kind: occ.node.kind, blueprintId: null, template: { name, type, technology, description, color, icon, inputs, outputs, metadata } });
-          useFactory.setState({ rotation: occ.node.rotation });
-        } else if (occ?.tile) {
-          s.setTool({ type: 'belt' });
-          useFactory.setState({ rotation: occ.tile.dir });
-        } else {
-          s.setTool(null);
-        }
+        if (cell) s.pickAt(cell);
+        else s.setTool(null);
       } else if (['w', 'a', 's', 'd'].includes(key)) {
         const step = e.shiftKey ? 160 : 60;
         const dx = key === 'a' ? step : key === 'd' ? -step : 0;

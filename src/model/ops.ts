@@ -50,11 +50,6 @@ export function canPlaceNode(p: Pipeline, x: number, y: number): boolean {
   return canPlaceCells(p, [{ x, y }]);
 }
 
-/** Whether two blocks are the same component and may join into one building. */
-function sameComponent(a: Pick<FactoryNode, 'kind' | 'rotation' | 'type'>, b: Pick<FactoryNode, 'kind' | 'rotation' | 'type'>) {
-  return a.kind === b.kind && a.rotation === b.rotation && a.type.trim() === b.type.trim();
-}
-
 /** Sets a node's cells from absolute positions, re-anchoring at the top-left. */
 export function setNodeCells(node: FactoryNode, cells: Pt[]) {
   const { cells: offsets, dx, dy } = normalizeOffsets(cells.map((c) => [c.x, c.y] as [number, number]));
@@ -64,30 +59,55 @@ export function setNodeCells(node: FactoryNode, cells: Pt[]) {
 }
 
 /**
- * Places a 1×1 block. If it touches a matching building (same kind, type and
- * facing) on any side it becomes part of it, and a block touching several
- * matching buildings fuses them into one. Returns the id of the building it
- * ends up in, or null when the cell is taken.
+ * The floor's one rule for structures: buildings of the same kind that touch
+ * (side by side, any direction) are always a single building. Merges every
+ * such pair until none are left. The larger building survives (the earlier one
+ * on a tie) and keeps its name, type, technology and facing; it takes over the
+ * other's cells, inputs, outputs and metadata. Returns how many merges happened.
+ */
+export function mergeTouching(p: Pipeline): number {
+  let merges = 0;
+  for (;;) {
+    const owner = new Map<string, FactoryNode>();
+    for (const n of p.nodes) for (const c of nodeCells(n)) owner.set(cellKey(c.x, c.y), n);
+    let pair: [FactoryNode, FactoryNode] | null = null;
+    search: for (const n of p.nodes) {
+      for (const c of nodeCells(n)) {
+        for (const [dx, dy] of DV) {
+          const o = owner.get(cellKey(c.x + dx, c.y + dy));
+          if (o && o !== n && o.kind === n.kind) {
+            pair = [n, o];
+            break search;
+          }
+        }
+      }
+    }
+    if (!pair) return merges;
+    const [a, b] = pair;
+    const aFirst = p.nodes.indexOf(a) < p.nodes.indexOf(b);
+    const keep = a.cells.length > b.cells.length || (a.cells.length === b.cells.length && aFirst) ? a : b;
+    const gone = keep === a ? b : a;
+    mergeInto(keep, gone);
+    setNodeCells(keep, [...nodeCells(keep), ...nodeCells(gone)]);
+    p.nodes = p.nodes.filter((n) => n !== gone);
+    p.arrows = p.arrows
+      .map((ar) => ({ ...ar, from: ar.from === gone.id ? keep.id : ar.from, to: ar.to === gone.id ? keep.id : ar.to }))
+      .filter((ar, i, all) => ar.from !== ar.to && all.findIndex((x) => x.from === ar.from && x.to === ar.to) === i);
+    merges++;
+  }
+}
+
+/**
+ * Places a 1×1 block. If it touches buildings of the same kind it becomes part
+ * of them (fusing several into one if it bridges them). Returns the id of the
+ * building it ends up in, or null when the cell is taken.
  */
 export function placeBlock(p: Pipeline, block: FactoryNode): string | null {
   const { x, y } = block;
   if (!canPlaceNode(p, x, y)) return null;
-  const around = new Set(DV.map(([dx, dy]) => cellKey(x + dx, y + dy)));
-  const touching = p.nodes.filter((n) => sameComponent(n, block) && nodeCells(n).some((c) => around.has(cellKey(c.x, c.y))));
-  if (!touching.length) {
-    p.nodes.push({ ...block, cells: [[0, 0]] });
-    return block.id;
-  }
-  const [target, ...others] = touching;
-  const cells = [...nodeCells(target), { x, y }];
-  for (const o of others) {
-    cells.push(...nodeCells(o));
-    mergeInto(target, o);
-  }
-  setNodeCells(target, cells);
-  const gone = new Set(others.map((o) => o.id));
-  p.nodes = p.nodes.filter((n) => !gone.has(n.id));
-  return target.id;
+  p.nodes.push({ ...block, cells: [[0, 0]] });
+  mergeTouching(p);
+  return p.nodes.find((n) => nodeCells(n).some((c) => c.x === x && c.y === y))?.id ?? null;
 }
 
 function mergeInto(target: FactoryNode, other: FactoryNode) {

@@ -28,7 +28,7 @@ export async function runExport(format: ExportFormat, region?: Rect, grid = fals
 export type DragPayload = { type: 'item'; id: string };
 
 type Gesture =
-  | { type: 'pan'; sx: number; sy: number; vx: number; vy: number; moved: boolean; clearOnClick: boolean }
+  | { type: 'pan'; sx: number; sy: number; vx: number; vy: number; moved: boolean; clearOnClick: boolean; pickCell?: Pt }
   | { type: 'paint'; last: Pt; changed: boolean }
   | { type: 'place'; last: Pt; placed: number }
   | { type: 'erase'; last: Pt; erased: boolean; moved: boolean }
@@ -172,7 +172,9 @@ export function Canvas() {
     }
 
     if (e.button === 1 || (e.button === 0 && spaceHeld.current)) {
-      gesture.current = { type: 'pan', sx: e.clientX, sy: e.clientY, vx: state.view.x, vy: state.view.y, moved: false, clearOnClick: false };
+      // Middle-drag pans; a middle click (no drag) picks up what's under the cursor, like Q.
+      e.preventDefault();
+      gesture.current = { type: 'pan', sx: e.clientX, sy: e.clientY, vx: state.view.x, vy: state.view.y, moved: false, clearOnClick: false, pickCell: e.button === 1 ? cell : undefined };
       setPanning(true);
       return;
     }
@@ -372,7 +374,9 @@ export function Canvas() {
     if (!g) return;
     const state = useFactory.getState();
 
-    if (g.type === 'pan' && !g.moved && g.clearOnClick) {
+    if (g.type === 'pan' && !g.moved && g.pickCell) {
+      state.pickAt(g.pickCell);
+    } else if (g.type === 'pan' && !g.moved && g.clearOnClick) {
       state.clearSelection();
     } else if (g.type === 'paint') {
       if (g.changed) state.edit((p) => ops.syncLinkItems(p), { history: false });
@@ -389,6 +393,9 @@ export function Canvas() {
         if (!g.moved && state.tool) state.setTool(null);
         else if (!g.moved) state.clearSelection();
       }
+    } else if (g.type === 'drag' && g.moved) {
+      // Dropped next to a building of the same kind: they become one structure.
+      state.edit((p) => void ops.mergeTouching(p), { history: false });
     } else if (g.type === 'drag' && !g.moved && g.narrowOnClick && g.nodeId) {
       state.selectNodes([g.nodeId]);
     } else if (g.type === 'marquee') {

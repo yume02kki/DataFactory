@@ -1,7 +1,7 @@
 import { produce } from 'immer';
 import { create } from 'zustand';
 import { KIND_META, makeItem, makeNode } from '../model/defaults';
-import { rotateDir, type Pt } from '../model/geometry';
+import { cellKey, rotateDir, type Pt } from '../model/geometry';
 import { uid } from '../model/ids';
 import * as ops from '../model/ops';
 import type { Blueprint, Dir, FactoryNode, ItemType, NodeKind, Pipeline, Selection, Tool, Viewport } from '../model/types';
@@ -47,6 +47,8 @@ export interface FactoryState {
   clearSelection: () => void;
 
   setTool: (tool: Tool | null) => void;
+  /** Pipette (Q / middle click): the building or belt on this cell becomes the build tool. */
+  pickAt: (cell: Pt) => void;
   setExportArea: (area: FactoryState['exportArea']) => void;
   /** R: rotates the ghost while building, otherwise the selected buildings. */
   rotate: (steps: number, hoverCell?: Pt | null) => void;
@@ -120,6 +122,9 @@ export const useFactory = create<FactoryState>()((set, get) => {
       }
       const next = produce(get().pipeline, (draft) => {
         recipe(draft);
+        // Touching buildings of the same kind are one structure. Live gestures
+        // (dragging, painting) skip this and settle when they end.
+        if (history) ops.mergeTouching(draft);
         // Keep combined item looks in step with whatever just changed.
         ops.applyRecipes(draft);
         draft.updatedAt = now;
@@ -171,6 +176,22 @@ export const useFactory = create<FactoryState>()((set, get) => {
     clearSelection: () => set({ selection: EMPTY_SELECTION }),
 
     setTool: (tool) => set({ tool, exportArea: null }),
+
+    pickAt: (cell) => {
+      const occ = ops.occupancy(get().pipeline).get(cellKey(cell.x, cell.y));
+      if (occ?.node) {
+        const { kind, rotation, name, type, technology, description, color, icon, inputs, outputs, metadata } = occ.node;
+        set({
+          tool: { type: 'building', kind, blueprintId: null, template: { name, type, technology, description, color, icon, inputs, outputs, metadata } },
+          rotation,
+          exportArea: null,
+        });
+      } else if (occ?.tile) {
+        set({ tool: { type: 'belt' }, rotation: occ.tile.dir, exportArea: null });
+      } else {
+        set({ tool: null });
+      }
+    },
     setExportArea: (exportArea) => set({ exportArea, tool: exportArea ? null : get().tool }),
 
     rotate: (steps, hoverCell) => {

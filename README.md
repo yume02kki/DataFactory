@@ -29,8 +29,10 @@ On first launch the app opens the example **Visit Analytics** factory. Use
 | **Buffer** | Temporarily holds or transports data between machines | input side + output side |
 | **Store** | Where processed data ends up | input side |
 
-Every building is made of 1×1 blocks, like belt tiles. A block placed touching a
-building of the same kind, type and facing, on any side, becomes part of it. That
+Every building is made of 1×1 blocks, like belt tiles. Buildings of the same kind
+that touch on any side are always one structure: placing, moving, nudging or
+rotating one against another merges them. The larger one keeps its name, type,
+technology and facing. That
 lets you build **any shape**: rows, L-shapes, squares, T-shapes, even rings. A
 building is drawn as one outlined shape, and every exposed face on its output side
 is an output port (every exposed face on its input side is an input port). The
@@ -100,7 +102,7 @@ It plays like shapez.io: pick a tool, left-click to build, right-click to destro
 | Connect | Items leave a building from the side with outward arrow tabs and enter from the side with inward tabs. A belt from one building's output side into another's input side connects them. A belt that stops short shows a red end |
 | Destroy | Right-click, or right-drag to destroy several things |
 | Put the tool away | Right-click empty floor, or `Esc` |
-| Pipette | `Q` picks up the building (with all its settings) or belt under the cursor as the tool |
+| Pipette | `Q` or a middle click picks up the building (with all its settings) or belt under the cursor as the tool; middle-drag still pans |
 | Choose what a belt carries | Drag an item from the palette onto the belt, or click the belt and pick it in the inspector |
 | Select / move | With no tool, click a building and drag it. `Shift`+drag a box to select buildings and belts together, then drag or nudge them with the arrow keys |
 | Duplicate / delete | `Ctrl D` / `Del` |

@@ -205,13 +205,42 @@ describe('shaped buildings', () => {
     expect(inputCells(n)).toHaveLength(3);
   });
 
-  it('keeps different kinds, types and facings apart', () => {
+  it('keeps different kinds apart, but joins the same kind whatever its type or facing', () => {
     const p = blankPipeline();
-    ops.placeBlock(p, block(0, 0));
-    ops.placeBlock(p, block(0, 1, 0, 'store'));
-    ops.placeBlock(p, block(1, 0, 2));
-    ops.placeBlock(p, { ...block(-1, 0), type: 'Validator' });
-    expect(p.nodes).toHaveLength(4);
+    const a = ops.placeBlock(p, block(0, 0));
+    ops.placeBlock(p, block(0, 1, 0, 'store')); // another kind: separate
+    expect(ops.placeBlock(p, block(1, 0, 2))).toBe(a); // same kind, other facing: joins
+    expect(ops.placeBlock(p, { ...block(-1, 0), type: 'Validator' })).toBe(a); // same kind, other type: joins
+    expect(p.nodes).toHaveLength(2);
+    expect(p.nodes.find((n) => n.id === a)).toMatchObject({ rotation: 0, type: 'Machine', cells: [[0, 0], [1, 0], [2, 0]] });
+  });
+
+  it('merges buildings of the same kind that end up touching after a move', () => {
+    const p = blankPipeline();
+    const big = { ...makeNode('store', 0, 0), name: 'Store', cells: [[0, 0], [0, 1], [0, 2], [1, 0], [1, 2]] as Array<[number, number]> };
+    const small = { ...makeNode('store', 5, 1), name: 'Object Storage', type: 'Object Storage', inputs: ['x'] };
+    p.nodes.push(big, small);
+    p.arrows.push({ id: 'a1', from: small.id, to: big.id, label: '', color: '#000', dashed: false });
+    small.x = 1; // moved into the notch of the C, like in the screenshot
+    expect(ops.mergeTouching(p)).toBe(1);
+    expect(p.nodes).toHaveLength(1);
+    expect(p.nodes[0]).toMatchObject({ id: big.id, name: 'Store', inputs: ['x'] });
+    expect(p.nodes[0].cells).toHaveLength(6);
+    expect(p.arrows).toHaveLength(0); // an arrow between the two became a loop, so it goes
+  });
+
+  it('fixes touching buildings of the same kind in older saves', () => {
+    const p = normalizePipeline({
+      nodes: [
+        { id: 'a', kind: 'machine', x: 0, y: 0, type: 'Enricher' },
+        { id: 'b', kind: 'machine', x: 0, y: 1, type: 'Validator' },
+        { id: 'c', kind: 'store', x: 1, y: 0 },
+      ],
+    });
+    expect(p.nodes.map((n) => [n.id, n.cells.length])).toEqual([
+      ['a', 2],
+      ['c', 1],
+    ]);
   });
 
   it('fuses every matching building a new block touches', () => {

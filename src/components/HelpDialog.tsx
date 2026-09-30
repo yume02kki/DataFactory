@@ -10,7 +10,7 @@ const CONTROLS: Array<[string, string]> = [
   ['Right click · drag', 'Destroy what is under the cursor'],
   ['Right click on floor · Esc', 'Put the tool away'],
   ['R · Shift R', 'Rotate the tool, the selected buildings, or the belt under the cursor'],
-  ['Q', 'Pick up the building or belt under the cursor as the tool'],
+  ['Q · Middle click', 'Pick up the building or belt under the cursor as the tool'],
   ['Drag item → belt', 'Choose what the belt carries'],
   ['Drag floor · WASD · Space+drag', 'Pan'],
   ['Scroll · + / −', 'Zoom'],
@@ -47,7 +47,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </div>
         <p className="muted small">
           Items enter a building on the side with inward arrows and leave on the side with outward arrows. Lay belts from one building's
-          output side into the next building's input side. Matching blocks that touch join into one building of any shape, with a port on
+          output side into the next building's input side. Buildings of the same kind that touch are always one structure, of any shape, with a port on
           every exposed face. A machine's <b>Combine</b> setting can stack, paint or mix its inputs' looks into its outputs. Every building is generic: its <b>type</b> says what role it plays and its{' '}
           <b>technology</b> is free text.
         </p>
