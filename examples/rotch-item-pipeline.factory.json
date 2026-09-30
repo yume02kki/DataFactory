@@ -1,0 +1,2705 @@
+{
+  "format": "datafactory",
+  "version": 1,
+  "pipeline": {
+    "id": "pipe_rotch_item_pipeline",
+    "name": "Rotch Item Pipeline",
+    "description": "Ingest → item pipeline → Rotch enrichment → join and update, laid out from the architecture diagram.",
+    "items": [
+      {
+        "id": "item_file",
+        "name": "File",
+        "shape": "square",
+        "color": "#aaaaaa",
+        "description": "Raw item file uploaded by Jordi.",
+        "fields": []
+      },
+      {
+        "id": "item_item",
+        "name": "Item",
+        "shape": "circle",
+        "color": "#ff666a",
+        "description": "Insert or Jordi update of an item.",
+        "fields": []
+      },
+      {
+        "id": "item_lookup",
+        "name": "Cold-state Lookup",
+        "shape": "triangle",
+        "color": "#ffa24d",
+        "description": "Merger asking for an item's older state.",
+        "fields": []
+      },
+      {
+        "id": "item_cold",
+        "name": "Cold State",
+        "shape": "triangle",
+        "color": "#66a7ff",
+        "description": "Previous state returned by Hog API.",
+        "fields": []
+      },
+      {
+        "id": "item_history",
+        "name": "Item History",
+        "shape": "hexagon",
+        "color": "#87fff5",
+        "description": "Item history kept for reflow.",
+        "fields": []
+      },
+      {
+        "id": "item_full",
+        "name": "Full Item",
+        "shape": "diamond",
+        "color": "#ff666a",
+        "description": "Merged item.",
+        "fields": []
+      },
+      {
+        "id": "item_lids",
+        "name": "Item + LIDs",
+        "shape": "square",
+        "color": "#fcf52a",
+        "description": "Item with its item LIDs.",
+        "fields": []
+      },
+      {
+        "id": "item_boom",
+        "name": "Boomerang Item",
+        "shape": "diamond",
+        "color": "#dd66ff",
+        "description": "Item + header, joined with related items.",
+        "fields": []
+      },
+      {
+        "id": "item_indexed",
+        "name": "Indexed Item",
+        "shape": "hexagon",
+        "color": "#aaaaaa",
+        "description": "Document written to Elastic.",
+        "fields": []
+      },
+      {
+        "id": "item_enrich",
+        "name": "Item to Enrich",
+        "shape": "circle",
+        "color": "#78ff66",
+        "description": "Item waiting for enrichments.",
+        "fields": []
+      },
+      {
+        "id": "item_sttlang",
+        "name": "STT per Language",
+        "shape": "star",
+        "color": "#fcf52a",
+        "description": "STT returned by ורניק API per language.",
+        "fields": []
+      },
+      {
+        "id": "item_sttenr",
+        "name": "STT Enriched",
+        "shape": "star",
+        "color": "#ffa24d",
+        "description": "Per-language STT work (E / A / P).",
+        "fields": []
+      },
+      {
+        "id": "item_sttreq",
+        "name": "STT Call",
+        "shape": "triangle",
+        "color": "#ff8fd0",
+        "description": "One STT call per item.",
+        "fields": []
+      },
+      {
+        "id": "item_sttres",
+        "name": "STT Result",
+        "shape": "star",
+        "color": "#66a7ff",
+        "description": "STT results.",
+        "fields": []
+      },
+      {
+        "id": "item_enres",
+        "name": "Enrichment Result",
+        "shape": "square",
+        "color": "#78ff66",
+        "description": "Results of the other enrichments.",
+        "fields": []
+      },
+      {
+        "id": "item_joined",
+        "name": "Joined Item",
+        "shape": "hexagon",
+        "color": "#dd66ff",
+        "description": "Item joined with all its enrichments.",
+        "fields": []
+      },
+      {
+        "id": "item_updated",
+        "name": "Updated Item",
+        "shape": "hexagon",
+        "color": "#78ff66",
+        "description": "Update written back to Elastic.",
+        "fields": []
+      }
+    ],
+    "nodes": [
+      {
+        "id": "node_jordi",
+        "kind": "source",
+        "name": "Jordi",
+        "type": "Ingest service",
+        "technology": "",
+        "description": "Files to S3, link back.",
+        "color": "#8fd35f",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "size": 2,
+        "inputs": [],
+        "outputs": [
+          "item_file",
+          "item_item"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_s3",
+        "kind": "store",
+        "name": "S3",
+        "type": "Object Storage",
+        "technology": "S3",
+        "description": "Item files.",
+        "color": "#b58af0",
+        "x": 4,
+        "y": 0,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_file"
+        ],
+        "outputs": [],
+        "metadata": []
+      },
+      {
+        "id": "node_items",
+        "kind": "buffer",
+        "name": "Items",
+        "type": "Topic",
+        "technology": "",
+        "description": "Inserts + Jordi updates.",
+        "color": "#f3c14f",
+        "x": 4,
+        "y": 6,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_item"
+        ],
+        "outputs": [
+          "item_item"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_merger",
+        "kind": "machine",
+        "name": "Items Merger",
+        "type": "Merger",
+        "technology": "Flink",
+        "description": "Merges updates into full items.",
+        "color": "#6aa9f0",
+        "x": 8,
+        "y": 6,
+        "rotation": 0,
+        "size": 2,
+        "inputs": [
+          "item_cold",
+          "item_item"
+        ],
+        "outputs": [
+          "item_full",
+          "item_lookup"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_hog",
+        "kind": "machine",
+        "name": "Hog API",
+        "type": "Lookup API",
+        "technology": "",
+        "description": "Cold-state lookup for the merger.",
+        "color": "#6aa9f0",
+        "x": 12,
+        "y": 12,
+        "rotation": 0,
+        "size": 2,
+        "inputs": [
+          "item_lookup"
+        ],
+        "outputs": [
+          "item_cold",
+          "item_history"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_iceberg",
+        "kind": "store",
+        "name": "Iceberg",
+        "type": "History store",
+        "technology": "Iceberg",
+        "description": "Items history for reflow.",
+        "color": "#b58af0",
+        "x": 16,
+        "y": 12,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_history"
+        ],
+        "outputs": [],
+        "metadata": []
+      },
+      {
+        "id": "node_fullitem",
+        "kind": "buffer",
+        "name": "Full item",
+        "type": "Topic",
+        "technology": "",
+        "description": "Merged item.",
+        "color": "#f3c14f",
+        "x": 12,
+        "y": 6,
+        "rotation": 0,
+        "size": 2,
+        "inputs": [
+          "item_full"
+        ],
+        "outputs": [
+          "item_full"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_oracle1",
+        "kind": "machine",
+        "name": "OracleInserter",
+        "type": "Writer",
+        "technology": "",
+        "description": "Writes item + item LIDs.",
+        "color": "#6aa9f0",
+        "x": 16,
+        "y": 0,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_full"
+        ],
+        "outputs": [
+          "item_lids"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_boomerang",
+        "kind": "machine",
+        "name": "Boomerang",
+        "type": "Joiner",
+        "technology": "",
+        "description": "Joins related items.",
+        "color": "#6aa9f0",
+        "x": 16,
+        "y": 6,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_full"
+        ],
+        "outputs": [
+          "item_boom"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_varnik",
+        "kind": "machine",
+        "name": "ורניק API",
+        "type": "Lookup API",
+        "technology": "",
+        "description": "Returns STT per language.",
+        "color": "#6aa9f0",
+        "x": 20,
+        "y": 0,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_lids"
+        ],
+        "outputs": [
+          "item_sttlang"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_boomitem",
+        "kind": "buffer",
+        "name": "Boomerang item",
+        "type": "Topic",
+        "technology": "",
+        "description": "Item + header.",
+        "color": "#f3c14f",
+        "x": 20,
+        "y": 6,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_boom"
+        ],
+        "outputs": [
+          "item_boom"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_inserter",
+        "kind": "machine",
+        "name": "Inserter",
+        "type": "Writer",
+        "technology": "",
+        "description": "Writes items to Elastic and hands them to enrichment.",
+        "color": "#6aa9f0",
+        "x": 24,
+        "y": 6,
+        "rotation": 0,
+        "size": 2,
+        "inputs": [
+          "item_boom"
+        ],
+        "outputs": [
+          "item_enrich",
+          "item_indexed"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_elastic",
+        "kind": "store",
+        "name": "Elastic",
+        "type": "Search index",
+        "technology": "Elastic",
+        "description": "Receives inserts and later updates.",
+        "color": "#b58af0",
+        "x": 64,
+        "y": 12,
+        "rotation": 0,
+        "size": 2,
+        "inputs": [
+          "item_indexed",
+          "item_updated"
+        ],
+        "outputs": [],
+        "metadata": []
+      },
+      {
+        "id": "node_enrichment",
+        "kind": "buffer",
+        "name": "Enrichment",
+        "type": "Topic",
+        "technology": "",
+        "description": "Items to enrich.",
+        "color": "#f3c14f",
+        "x": 28,
+        "y": 6,
+        "rotation": 0,
+        "size": 3,
+        "inputs": [
+          "item_enrich"
+        ],
+        "outputs": [
+          "item_enrich"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_rotchstt",
+        "kind": "machine",
+        "name": "Rotch STT",
+        "type": "Enricher",
+        "technology": "",
+        "description": "Per language: E / A / P.",
+        "color": "#6aa9f0",
+        "x": 32,
+        "y": 0,
+        "rotation": 0,
+        "size": 2,
+        "inputs": [
+          "item_enrich",
+          "item_sttlang"
+        ],
+        "outputs": [
+          "item_sttenr"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_rotch",
+        "kind": "machine",
+        "name": "Rotch",
+        "type": "Enricher",
+        "technology": "",
+        "description": "Other enrichments.",
+        "color": "#6aa9f0",
+        "x": 32,
+        "y": 12,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_enrich"
+        ],
+        "outputs": [
+          "item_enres"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_tacti",
+        "kind": "buffer",
+        "name": "Tacti.sttEnriched",
+        "type": "Topic",
+        "technology": "",
+        "description": "STT work per language.",
+        "color": "#f3c14f",
+        "x": 36,
+        "y": 0,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_sttenr"
+        ],
+        "outputs": [
+          "item_sttenr"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_express",
+        "kind": "machine",
+        "name": "Rotch.Express",
+        "type": "Enricher",
+        "technology": "",
+        "description": "One STT call per item.",
+        "color": "#6aa9f0",
+        "x": 40,
+        "y": 0,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_sttenr"
+        ],
+        "outputs": [
+          "item_sttreq"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_standard",
+        "kind": "machine",
+        "name": "Rotch.Standard",
+        "type": "Enricher",
+        "technology": "",
+        "description": "Produces STT results.",
+        "color": "#6aa9f0",
+        "x": 44,
+        "y": 0,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_sttreq"
+        ],
+        "outputs": [
+          "item_sttres"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_sttres",
+        "kind": "buffer",
+        "name": "STT.Res",
+        "type": "Topic",
+        "technology": "",
+        "description": "STT results.",
+        "color": "#f3c14f",
+        "x": 48,
+        "y": 0,
+        "rotation": 0,
+        "size": 2,
+        "inputs": [
+          "item_sttres"
+        ],
+        "outputs": [
+          "item_sttres"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_enriched",
+        "kind": "buffer",
+        "name": "Enrichment.Enriched",
+        "type": "Topic",
+        "technology": "",
+        "description": "Enrichment results.",
+        "color": "#f3c14f",
+        "x": 36,
+        "y": 12,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_enres"
+        ],
+        "outputs": [
+          "item_enres"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_oracle2",
+        "kind": "machine",
+        "name": "OracleInserter (STT)",
+        "type": "Writer",
+        "technology": "",
+        "description": "Item content (STT).",
+        "color": "#6aa9f0",
+        "x": 52,
+        "y": 0,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_sttres"
+        ],
+        "outputs": [],
+        "metadata": []
+      },
+      {
+        "id": "node_joiner",
+        "kind": "machine",
+        "name": "Joiner",
+        "type": "Joiner",
+        "technology": "",
+        "description": "Joins item + enrichments.",
+        "color": "#6aa9f0",
+        "x": 52,
+        "y": 6,
+        "rotation": 0,
+        "size": 3,
+        "inputs": [
+          "item_enres",
+          "item_enrich",
+          "item_sttres"
+        ],
+        "outputs": [
+          "item_joined"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_joineditem",
+        "kind": "buffer",
+        "name": "Joined item",
+        "type": "Topic",
+        "technology": "",
+        "description": "Read by Updater.",
+        "color": "#f3c14f",
+        "x": 56,
+        "y": 6,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_joined"
+        ],
+        "outputs": [
+          "item_joined"
+        ],
+        "metadata": []
+      },
+      {
+        "id": "node_updater",
+        "kind": "machine",
+        "name": "Updater",
+        "type": "Writer",
+        "technology": "",
+        "description": "Updates Elastic with the joined item.",
+        "color": "#6aa9f0",
+        "x": 60,
+        "y": 6,
+        "rotation": 0,
+        "size": 1,
+        "inputs": [
+          "item_joined"
+        ],
+        "outputs": [
+          "item_updated"
+        ],
+        "metadata": []
+      }
+    ],
+    "belts": [
+      {
+        "id": "belt_jordi_s3_0",
+        "x": 1,
+        "y": 0,
+        "dir": 0,
+        "itemId": "item_file",
+        "description": ""
+      },
+      {
+        "id": "belt_jordi_s3_1",
+        "x": 2,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_jordi_s3_2",
+        "x": 3,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_items_merger_0",
+        "x": 5,
+        "y": 6,
+        "dir": 0,
+        "itemId": "item_item",
+        "description": ""
+      },
+      {
+        "id": "belt_items_merger_1",
+        "x": 6,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_items_merger_2",
+        "x": 7,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_iceberg_0",
+        "x": 13,
+        "y": 13,
+        "dir": 0,
+        "itemId": "item_history",
+        "description": ""
+      },
+      {
+        "id": "belt_hog_iceberg_1",
+        "x": 14,
+        "y": 13,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_iceberg_2",
+        "x": 14,
+        "y": 12,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_iceberg_3",
+        "x": 15,
+        "y": 12,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_merger_fullitem_0",
+        "x": 9,
+        "y": 6,
+        "dir": 0,
+        "itemId": "item_full",
+        "description": ""
+      },
+      {
+        "id": "belt_merger_fullitem_1",
+        "x": 10,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_merger_fullitem_2",
+        "x": 11,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_boomerang_0",
+        "x": 13,
+        "y": 7,
+        "dir": 0,
+        "itemId": "item_full",
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_boomerang_1",
+        "x": 14,
+        "y": 7,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_boomerang_2",
+        "x": 14,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_boomerang_3",
+        "x": 15,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_oracle1_varnik_0",
+        "x": 17,
+        "y": 0,
+        "dir": 0,
+        "itemId": "item_lids",
+        "description": ""
+      },
+      {
+        "id": "belt_oracle1_varnik_1",
+        "x": 18,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_oracle1_varnik_2",
+        "x": 19,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_boomerang_boomitem_0",
+        "x": 17,
+        "y": 6,
+        "dir": 0,
+        "itemId": "item_boom",
+        "description": ""
+      },
+      {
+        "id": "belt_boomerang_boomitem_1",
+        "x": 18,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_boomerang_boomitem_2",
+        "x": 19,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_boomitem_inserter_0",
+        "x": 21,
+        "y": 6,
+        "dir": 0,
+        "itemId": "item_boom",
+        "description": ""
+      },
+      {
+        "id": "belt_boomitem_inserter_1",
+        "x": 22,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_boomitem_inserter_2",
+        "x": 23,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_enrichment_0",
+        "x": 25,
+        "y": 6,
+        "dir": 0,
+        "itemId": "item_enrich",
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_enrichment_1",
+        "x": 26,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_enrichment_2",
+        "x": 27,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_rotchstt_tacti_0",
+        "x": 33,
+        "y": 0,
+        "dir": 0,
+        "itemId": "item_sttenr",
+        "description": ""
+      },
+      {
+        "id": "belt_rotchstt_tacti_1",
+        "x": 34,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_rotchstt_tacti_2",
+        "x": 35,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_tacti_express_0",
+        "x": 37,
+        "y": 0,
+        "dir": 0,
+        "itemId": "item_sttenr",
+        "description": ""
+      },
+      {
+        "id": "belt_tacti_express_1",
+        "x": 38,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_tacti_express_2",
+        "x": 39,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_express_standard_0",
+        "x": 41,
+        "y": 0,
+        "dir": 0,
+        "itemId": "item_sttreq",
+        "description": ""
+      },
+      {
+        "id": "belt_express_standard_1",
+        "x": 42,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_express_standard_2",
+        "x": 43,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_standard_sttres_0",
+        "x": 45,
+        "y": 0,
+        "dir": 0,
+        "itemId": "item_sttres",
+        "description": ""
+      },
+      {
+        "id": "belt_standard_sttres_1",
+        "x": 46,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_standard_sttres_2",
+        "x": 47,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_sttres_oracle2_0",
+        "x": 49,
+        "y": 0,
+        "dir": 0,
+        "itemId": "item_sttres",
+        "description": ""
+      },
+      {
+        "id": "belt_sttres_oracle2_1",
+        "x": 50,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_sttres_oracle2_2",
+        "x": 51,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_rotch_enriched_0",
+        "x": 33,
+        "y": 12,
+        "dir": 0,
+        "itemId": "item_enres",
+        "description": ""
+      },
+      {
+        "id": "belt_rotch_enriched_1",
+        "x": 34,
+        "y": 12,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_rotch_enriched_2",
+        "x": 35,
+        "y": 12,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_joiner_joineditem_0",
+        "x": 53,
+        "y": 6,
+        "dir": 0,
+        "itemId": "item_joined",
+        "description": ""
+      },
+      {
+        "id": "belt_joiner_joineditem_1",
+        "x": 54,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_joiner_joineditem_2",
+        "x": 55,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_joineditem_updater_0",
+        "x": 57,
+        "y": 6,
+        "dir": 0,
+        "itemId": "item_joined",
+        "description": ""
+      },
+      {
+        "id": "belt_joineditem_updater_1",
+        "x": 58,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_joineditem_updater_2",
+        "x": 59,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_jordi_items_0",
+        "x": 1,
+        "y": 1,
+        "dir": 1,
+        "itemId": "item_item",
+        "description": ""
+      },
+      {
+        "id": "belt_jordi_items_1",
+        "x": 1,
+        "y": 2,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_jordi_items_2",
+        "x": 1,
+        "y": 3,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_jordi_items_3",
+        "x": 1,
+        "y": 4,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_jordi_items_4",
+        "x": 1,
+        "y": 5,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_jordi_items_5",
+        "x": 1,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_jordi_items_6",
+        "x": 2,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_jordi_items_7",
+        "x": 3,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_merger_hog_0",
+        "x": 9,
+        "y": 7,
+        "dir": 1,
+        "itemId": "item_lookup",
+        "description": ""
+      },
+      {
+        "id": "belt_merger_hog_1",
+        "x": 9,
+        "y": 8,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_merger_hog_2",
+        "x": 9,
+        "y": 9,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_merger_hog_3",
+        "x": 9,
+        "y": 10,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_merger_hog_4",
+        "x": 9,
+        "y": 11,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_merger_hog_5",
+        "x": 9,
+        "y": 12,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_merger_hog_6",
+        "x": 10,
+        "y": 12,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_merger_hog_7",
+        "x": 11,
+        "y": 12,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_oracle1_0",
+        "x": 13,
+        "y": 6,
+        "dir": 3,
+        "itemId": "item_full",
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_oracle1_1",
+        "x": 13,
+        "y": 5,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_oracle1_2",
+        "x": 13,
+        "y": 4,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_oracle1_3",
+        "x": 13,
+        "y": 3,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_oracle1_4",
+        "x": 13,
+        "y": 2,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_oracle1_5",
+        "x": 13,
+        "y": 1,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_oracle1_6",
+        "x": 13,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_oracle1_7",
+        "x": 14,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_fullitem_oracle1_8",
+        "x": 15,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotchstt_0",
+        "x": 29,
+        "y": 6,
+        "dir": 3,
+        "itemId": "item_enrich",
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotchstt_1",
+        "x": 29,
+        "y": 5,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotchstt_2",
+        "x": 29,
+        "y": 4,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotchstt_3",
+        "x": 29,
+        "y": 3,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotchstt_4",
+        "x": 29,
+        "y": 2,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotchstt_5",
+        "x": 29,
+        "y": 1,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotchstt_6",
+        "x": 30,
+        "y": 1,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotchstt_7",
+        "x": 31,
+        "y": 1,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotch_0",
+        "x": 29,
+        "y": 8,
+        "dir": 0,
+        "itemId": "item_enrich",
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotch_1",
+        "x": 30,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotch_2",
+        "x": 31,
+        "y": 8,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotch_3",
+        "x": 31,
+        "y": 9,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotch_4",
+        "x": 31,
+        "y": 10,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotch_5",
+        "x": 31,
+        "y": 11,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_rotch_6",
+        "x": 31,
+        "y": 12,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_sttres_joiner_0",
+        "x": 49,
+        "y": 1,
+        "dir": 1,
+        "itemId": "item_sttres",
+        "description": ""
+      },
+      {
+        "id": "belt_sttres_joiner_1",
+        "x": 49,
+        "y": 2,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_sttres_joiner_2",
+        "x": 49,
+        "y": 3,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_sttres_joiner_3",
+        "x": 49,
+        "y": 4,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_sttres_joiner_4",
+        "x": 49,
+        "y": 5,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_sttres_joiner_5",
+        "x": 49,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_sttres_joiner_6",
+        "x": 50,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_sttres_joiner_7",
+        "x": 51,
+        "y": 6,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_updater_elastic_0",
+        "x": 61,
+        "y": 6,
+        "dir": 1,
+        "itemId": "item_updated",
+        "description": ""
+      },
+      {
+        "id": "belt_updater_elastic_1",
+        "x": 61,
+        "y": 7,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_updater_elastic_2",
+        "x": 61,
+        "y": 8,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_updater_elastic_3",
+        "x": 61,
+        "y": 9,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_updater_elastic_4",
+        "x": 61,
+        "y": 10,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_updater_elastic_5",
+        "x": 61,
+        "y": 11,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_updater_elastic_6",
+        "x": 61,
+        "y": 12,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_updater_elastic_7",
+        "x": 61,
+        "y": 13,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_updater_elastic_8",
+        "x": 62,
+        "y": 13,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_updater_elastic_9",
+        "x": 63,
+        "y": 13,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_varnik_rotchstt_0",
+        "x": 21,
+        "y": 0,
+        "dir": 0,
+        "itemId": "item_sttlang",
+        "description": ""
+      },
+      {
+        "id": "belt_varnik_rotchstt_1",
+        "x": 22,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_varnik_rotchstt_2",
+        "x": 23,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_varnik_rotchstt_3",
+        "x": 24,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_varnik_rotchstt_4",
+        "x": 25,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_varnik_rotchstt_5",
+        "x": 26,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_varnik_rotchstt_6",
+        "x": 27,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_varnik_rotchstt_7",
+        "x": 28,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_varnik_rotchstt_8",
+        "x": 29,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_varnik_rotchstt_9",
+        "x": 30,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_varnik_rotchstt_10",
+        "x": 31,
+        "y": 0,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_0",
+        "x": 37,
+        "y": 12,
+        "dir": 3,
+        "itemId": "item_enres",
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_1",
+        "x": 37,
+        "y": 11,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_2",
+        "x": 37,
+        "y": 10,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_3",
+        "x": 37,
+        "y": 9,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_4",
+        "x": 37,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_5",
+        "x": 38,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_6",
+        "x": 39,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_7",
+        "x": 40,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_8",
+        "x": 41,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_9",
+        "x": 42,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_10",
+        "x": 43,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_11",
+        "x": 44,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_12",
+        "x": 45,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_13",
+        "x": 46,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_14",
+        "x": 47,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_15",
+        "x": 48,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_16",
+        "x": 49,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_17",
+        "x": 50,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enriched_joiner_18",
+        "x": 51,
+        "y": 8,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_0",
+        "x": 29,
+        "y": 7,
+        "dir": 0,
+        "itemId": "item_enrich",
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_1",
+        "x": 30,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_2",
+        "x": 31,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_3",
+        "x": 32,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_4",
+        "x": 33,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_5",
+        "x": 34,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_6",
+        "x": 35,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_7",
+        "x": 36,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_8",
+        "x": 37,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_9",
+        "x": 38,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_10",
+        "x": 39,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_11",
+        "x": 40,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_12",
+        "x": 41,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_13",
+        "x": 42,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_14",
+        "x": 43,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_15",
+        "x": 44,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_16",
+        "x": 45,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_17",
+        "x": 46,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_18",
+        "x": 47,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_19",
+        "x": 48,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_20",
+        "x": 49,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_21",
+        "x": 50,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_enrichment_joiner_22",
+        "x": 51,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_0",
+        "x": 25,
+        "y": 7,
+        "dir": 1,
+        "itemId": "item_indexed",
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_1",
+        "x": 25,
+        "y": 8,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_2",
+        "x": 25,
+        "y": 9,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_3",
+        "x": 25,
+        "y": 10,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_4",
+        "x": 25,
+        "y": 11,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_5",
+        "x": 25,
+        "y": 12,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_6",
+        "x": 25,
+        "y": 13,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_7",
+        "x": 25,
+        "y": 14,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_8",
+        "x": 25,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_9",
+        "x": 26,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_10",
+        "x": 27,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_11",
+        "x": 28,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_12",
+        "x": 29,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_13",
+        "x": 30,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_14",
+        "x": 31,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_15",
+        "x": 32,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_16",
+        "x": 33,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_17",
+        "x": 34,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_18",
+        "x": 35,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_19",
+        "x": 36,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_20",
+        "x": 37,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_21",
+        "x": 38,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_22",
+        "x": 39,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_23",
+        "x": 40,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_24",
+        "x": 41,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_25",
+        "x": 42,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_26",
+        "x": 43,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_27",
+        "x": 44,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_28",
+        "x": 45,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_29",
+        "x": 46,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_30",
+        "x": 47,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_31",
+        "x": 48,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_32",
+        "x": 49,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_33",
+        "x": 50,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_34",
+        "x": 51,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_35",
+        "x": 52,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_36",
+        "x": 53,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_37",
+        "x": 54,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_38",
+        "x": 55,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_39",
+        "x": 56,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_40",
+        "x": 57,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_41",
+        "x": 58,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_42",
+        "x": 59,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_43",
+        "x": 60,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_44",
+        "x": 61,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_45",
+        "x": 62,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_46",
+        "x": 63,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_47",
+        "x": 64,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_48",
+        "x": 65,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_49",
+        "x": 66,
+        "y": 15,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_50",
+        "x": 67,
+        "y": 15,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_51",
+        "x": 67,
+        "y": 14,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_52",
+        "x": 67,
+        "y": 13,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_53",
+        "x": 67,
+        "y": 12,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_54",
+        "x": 67,
+        "y": 11,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_55",
+        "x": 66,
+        "y": 11,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_56",
+        "x": 65,
+        "y": 11,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_57",
+        "x": 64,
+        "y": 11,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_58",
+        "x": 63,
+        "y": 11,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_inserter_elastic_59",
+        "x": 63,
+        "y": 12,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_0",
+        "x": 13,
+        "y": 12,
+        "dir": 3,
+        "itemId": "item_cold",
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_1",
+        "x": 13,
+        "y": 11,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_2",
+        "x": 14,
+        "y": 11,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_3",
+        "x": 15,
+        "y": 11,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_4",
+        "x": 16,
+        "y": 11,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_5",
+        "x": 17,
+        "y": 11,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_6",
+        "x": 18,
+        "y": 11,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_7",
+        "x": 19,
+        "y": 11,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_8",
+        "x": 19,
+        "y": 12,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_9",
+        "x": 19,
+        "y": 13,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_10",
+        "x": 19,
+        "y": 14,
+        "dir": 1,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_11",
+        "x": 19,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_12",
+        "x": 18,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_13",
+        "x": 17,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_14",
+        "x": 16,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_15",
+        "x": 15,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_16",
+        "x": 14,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_17",
+        "x": 13,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_18",
+        "x": 12,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_19",
+        "x": 11,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_20",
+        "x": 10,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_21",
+        "x": 9,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_22",
+        "x": 8,
+        "y": 15,
+        "dir": 2,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_23",
+        "x": 7,
+        "y": 15,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_24",
+        "x": 7,
+        "y": 14,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_25",
+        "x": 7,
+        "y": 13,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_26",
+        "x": 7,
+        "y": 12,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_27",
+        "x": 7,
+        "y": 11,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_28",
+        "x": 7,
+        "y": 10,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_29",
+        "x": 7,
+        "y": 9,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_30",
+        "x": 7,
+        "y": 8,
+        "dir": 3,
+        "itemId": null,
+        "description": ""
+      },
+      {
+        "id": "belt_hog_merger_31",
+        "x": 7,
+        "y": 7,
+        "dir": 0,
+        "itemId": null,
+        "description": ""
+      }
+    ],
+    "view": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    },
+    "createdAt": 1790766230666,
+    "updatedAt": 1790766230666
+  }
+}
