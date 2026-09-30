@@ -40,7 +40,8 @@ separate buildings. `R` rotates the whole shape. Buildings of different types
 placed directly in front of each other hand items over without a belt.
 
 Buffers and stores are drawn as **tanks**, not machines: fully rounded vessels
-(one block is round, a row is a capsule). Buffers show their queued items through
+(one block is round, a row is a capsule) held in the same square frame as other
+buildings, so belts meet a flat edge. Buffers show their queued items through
 a round window in each block. Stores carry the storage symbol.
 
 ### Combining item looks

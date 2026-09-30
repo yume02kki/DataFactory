@@ -105,8 +105,8 @@ export const BuildingArt = memo(function BuildingArt({ kind, cells, rotation = 0
 
   return (
     <g className={`art art-${kind}`}>
-      {ports && meta.hasInput && inputCells(node).map((c) => tab(c, back, tank ? 4 : 1.5))}
-      {ports && meta.hasOutput && outputCells(node).map((c) => tab(c, rotation, tank ? -4 : -1.5))}
+      {ports && meta.hasInput && inputCells(node).map((c) => tab(c, back, 1.5))}
+      {ports && meta.hasOutput && outputCells(node).map((c) => tab(c, rotation, -1.5))}
       {tank ? (
         <Tank kind={kind} cells={cells} color={color} queue={queue} />
       ) : (
@@ -124,8 +124,9 @@ export const BuildingArt = memo(function BuildingArt({ kind, cells, rotation = 0
 
 /**
  * Buffers and stores are drawn as tanks rather than machines: a fully rounded
- * vessel (one block is round, a row is a capsule). Buffers show their queued
- * items through round windows, one per block; stores carry the storage symbol.
+ * vessel (one block is round, a row is a capsule) held in the same square
+ * frame as other buildings, so belts meet a flat edge. Buffers show their
+ * queued items through round windows, one per block; stores carry the storage symbol.
  */
 function Tank({ kind, cells, color, queue }: { kind: 'buffer' | 'store'; cells: Pt[]; color: string; queue: ItemType[] }) {
   const round = CELL / 2;
@@ -134,8 +135,8 @@ function Tank({ kind, cells, color, queue }: { kind: 'buffer' | 'store'; cells: 
   const sym = symbolPoint(cells);
   return (
     <g className={`tank tank-${kind}`}>
-      <path className="plate" d={outlinePath(cells, 2.5, round - 2.5)} fillRule="evenodd" />
-      <path className="body" d={outlinePath(cells, 6.5, round - 6.5)} fillRule="evenodd" fill={color} />
+      <path className="plate" d={outlinePath(cells, 2.5, 7)} fillRule="evenodd" />
+      <path className="body" d={outlinePath(cells, 5.5, round - 5.5)} fillRule="evenodd" fill={color} />
       {kind === 'buffer' &&
         cells.slice(0, 12).map((c, i) => {
           const p = cellCenter(c.x, c.y);
