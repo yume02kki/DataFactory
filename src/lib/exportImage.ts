@@ -1,5 +1,8 @@
 import { applyPalette, GIFEncoder, quantize } from 'gifenc';
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
+import type { H264MP4Encoder } from 'h264-mp4-encoder';
+import { readMp4Samples } from './mp4Samples';
+import wasmEncoderUrl from 'h264-mp4-encoder/embuild/dist/h264-mp4-encoder.web.js?url';
 import { CELL, contentBounds, type Rect } from '../model/geometry';
 import { useFactory } from '../store/useFactory';
 import { CANVAS_ID } from './viewport';
@@ -22,6 +25,8 @@ const MP4_FPS = 30;
 /** Frames in one seamless loop (the same motion the GIF shows in 20). */
 const MP4_LOOP_FRAMES = 36;
 const MP4_LOOPS = 5;
+/** The fallback software encoder is slower, so it works at a smaller size. */
+const MAX_WASM_SIDE = 1920;
 const GIF_FRAMES = 20;
 const GIF_FRAME_MS = 60;
 /** The gear has 8 teeth, so turning it 1/8 per loop repeats seamlessly. */
@@ -260,15 +265,28 @@ async function pickCodec(width: number, height: number): Promise<{ config: Video
   return null;
 }
 
+/** Draws one loop of frames at the given size. */
+async function renderLoop(snap: ReturnType<typeof snapshotWorld>, area: Rect, css: string, grid: boolean, w: number, h: number) {
+  const loop: HTMLCanvasElement[] = [];
+  for (let f = 0; f < MP4_LOOP_FRAMES; f++) {
+    snap.pose(f / MP4_LOOP_FRAMES);
+    loop.push(await rasterize(buildSvg(snap.clone, area, css, grid), w, h));
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  return loop;
+}
+
 async function exportMp4(snap: ReturnType<typeof snapshotWorld>, area: Rect, css: string, grid: boolean) {
-  if (typeof VideoEncoder === 'undefined') throw new Error('This browser can’t record video; try Chrome, Edge or Safari');
-  const scale = fitScale(area, MP4_SCALE, MAX_MP4_SIDE);
   // Video encoders want even sizes.
   const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
-  const w = even(area.w * scale);
-  const h = even(area.h * scale);
-  const codec = await pickCodec(w, h);
-  if (!codec) throw new Error('This browser can’t encode MP4 video');
+  // The browser's own encoder (WebCodecs) only exists on HTTPS and localhost pages.
+  const codec = typeof VideoEncoder === 'undefined' ? null : await pickCodec(even(area.w * fitScale(area, MP4_SCALE, MAX_MP4_SIDE)), even(area.h * fitScale(area, MP4_SCALE, MAX_MP4_SIDE)));
+  if (!codec) {
+    const scale = fitScale(area, MP4_SCALE, MAX_WASM_SIDE);
+    await exportMp4Wasm(snap, area, css, grid, even(area.w * scale), even(area.h * scale));
+    return;
+  }
+  const { width: w, height: h } = codec.config;
 
   const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: codec.mux, width: w, height: h, frameRate: MP4_FPS }, fastStart: 'in-memory' });
   let failure: unknown = null;
@@ -279,13 +297,8 @@ async function exportMp4(snap: ReturnType<typeof snapshotWorld>, area: Rect, css
   encoder.configure(codec.config);
 
   // Draw one loop, then play it several times over.
-  const loop: ImageBitmap[] = [];
+  const loop = await renderLoop(snap, area, css, grid, w, h);
   try {
-    for (let f = 0; f < MP4_LOOP_FRAMES; f++) {
-      snap.pose(f / MP4_LOOP_FRAMES);
-      loop.push(await createImageBitmap(await rasterize(buildSvg(snap.clone, area, css, grid), w, h)));
-      await new Promise((r) => setTimeout(r, 0));
-    }
     const frameUs = 1_000_000 / MP4_FPS;
     for (let i = 0; i < MP4_LOOP_FRAMES * MP4_LOOPS; i++) {
       if (failure) throw failure;
@@ -298,8 +311,67 @@ async function exportMp4(snap: ReturnType<typeof snapshotWorld>, area: Rect, css
     await encoder.flush();
     if (failure) throw failure;
   } finally {
-    loop.forEach((b) => b.close());
     if (encoder.state !== 'closed') encoder.close();
+  }
+  muxer.finalize();
+  download(new Blob([muxer.target.buffer], { type: 'video/mp4' }), fileName('mp4'));
+}
+
+let wasmEncoder: Promise<void> | null = null;
+
+/** Loads the WebAssembly H.264 encoder (only needed where WebCodecs isn't available, e.g. plain-HTTP sites). */
+function loadWasmEncoder(): Promise<void> {
+  wasmEncoder ??= new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = wasmEncoderUrl;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      wasmEncoder = null;
+      reject(new Error('Could not load the video encoder'));
+    };
+    document.head.appendChild(script);
+  });
+  return wasmEncoder;
+}
+
+/**
+ * Software H.264 for pages without WebCodecs. Encoding is the slow part, so
+ * one loop is encoded (starting on a key frame) and its frames are written
+ * into the final file several times over.
+ */
+async function exportMp4Wasm(snap: ReturnType<typeof snapshotWorld>, area: Rect, css: string, grid: boolean, w: number, h: number) {
+  await loadWasmEncoder();
+  const HME = (window as unknown as { HME: { createH264MP4Encoder: () => Promise<H264MP4Encoder> } }).HME;
+  const encoder = await HME.createH264MP4Encoder();
+  let once: Uint8Array;
+  try {
+    encoder.width = w;
+    encoder.height = h;
+    encoder.frameRate = MP4_FPS;
+    encoder.quantizationParameter = 22;
+    encoder.speed = 5;
+    encoder.groupOfPictures = MP4_LOOP_FRAMES;
+    encoder.initialize();
+    for (const frame of await renderLoop(snap, area, css, grid, w, h)) {
+      encoder.addFrameRgba(frame.getContext('2d')!.getImageData(0, 0, w, h).data);
+      // Keep the page responsive while encoding.
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    encoder.finalize();
+    once = encoder.FS.readFile(encoder.outputFilename);
+    encoder.FS.unlink(encoder.outputFilename);
+  } finally {
+    encoder.delete();
+  }
+
+  const loop = readMp4Samples(once);
+  const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: 'avc', width: loop.width, height: loop.height, frameRate: MP4_FPS }, fastStart: 'in-memory' });
+  const meta: EncodedVideoChunkMetadata = { decoderConfig: { codec: loop.codec, codedWidth: loop.width, codedHeight: loop.height, description: loop.avcC } };
+  const frameUs = 1_000_000 / MP4_FPS;
+  const n = loop.samples.length;
+  for (let i = 0; i < n * MP4_LOOPS; i++) {
+    const sample = loop.samples[i % n];
+    muxer.addVideoChunkRaw(sample.data, sample.key ? 'key' : 'delta', Math.round(i * frameUs), Math.round(frameUs), i === 0 ? meta : undefined);
   }
   muxer.finalize();
   download(new Blob([muxer.target.buffer], { type: 'video/mp4' }), fileName('mp4'));
