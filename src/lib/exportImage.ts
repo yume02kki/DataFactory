@@ -6,10 +6,13 @@ import { CANVAS_ID } from './viewport';
 export type ExportFormat = 'png' | 'gif';
 
 /** Space around the whole factory so names under buildings aren't clipped. */
-const PAD = { x: CELL * 1.5, top: CELL, bottom: CELL * 1.75 };
+const PAD = { x: CELL * 1.5, top: CELL, bottom: CELL * 2.25 };
 const PNG_SCALE = 2;
 const MAX_PNG_SIDE = 8000;
-const MAX_GIF_SIDE = 1400;
+/** GIFs are drawn larger than 1:1 and with bigger labels so text survives the 256-colour palette. */
+const GIF_SCALE = 1.5;
+const MAX_GIF_SIDE = 2100;
+const GIF_TEXT_SCALE = 1.45;
 const GIF_FRAMES = 20;
 const GIF_FRAME_MS = 60;
 /** The gear has 8 teeth, so turning it 1/8 per loop repeats seamlessly. */
@@ -50,8 +53,36 @@ interface MovingItem {
   gap: number;
 }
 
+/** Grows an element about the point (px, py) of its own coordinates, keeping its transform. */
+function scaleAbout(el: Element, s: number, px: number, py: number) {
+  const t = el.getAttribute('transform') ?? '';
+  el.setAttribute('transform', `${t} translate(${px} ${py}) scale(${s}) translate(${-px} ${-py})`);
+}
+
+/** Enlarges building names, area tags and arrow labels, each about its own anchor. */
+function enlargeText(clone: SVGGElement, s: number) {
+  // Building names hang below the building from their top middle; the smaller
+  // type / technology line grows less (it's wide and would run into neighbours)
+  // and moves down to clear the bigger name.
+  clone.querySelectorAll('.node .labels').forEach((labels) => {
+    const name = labels.querySelector(':scope > .node-name');
+    if (name) scaleAbout(name, s, 0, -12);
+    const meta = labels.querySelector(':scope > g');
+    const m = 1 + (s - 1) / 2;
+    const at = meta?.getAttribute('transform')?.match(/translate\(([-\d.e]+) ([-\d.e]+)\)/);
+    if (meta && at) meta.setAttribute('transform', `translate(${Number(at[1]) * m} ${Number(at[2]) + 12 * (s - 1)}) scale(${m})`);
+  });
+  // Area tags grow from their top-left corner, inside the area.
+  clone.querySelectorAll('.area-label').forEach((el) => scaleAbout(el, s, 0, 0));
+  // Arrow labels stay centred on the arrow.
+  clone.querySelectorAll('.arrow-label').forEach((el) => {
+    const w = Number(el.querySelector('rect')?.getAttribute('width') ?? 0);
+    scaleAbout(el, s, w / 2, 10);
+  });
+}
+
 /** A copy of the drawn factory, cleaned of editing chrome, with handles to move items per frame. */
-function snapshotWorld() {
+function snapshotWorld(textScale = 1) {
   const svg = document.querySelector(`#${CANVAS_ID} svg.canvas`);
   const world = svg?.querySelector(':scope > g');
   if (!world) throw new Error('Nothing to export');
@@ -61,6 +92,7 @@ function snapshotWorld() {
     .querySelectorAll('.hover-cell, .belt-ghost, .ghost-building, .marquee, .select-ring, .belt-glow, .belt-label, .pulse, .arrow-glow, .arrow-preview, .area-handle, .area-preview')
     .forEach((el) => el.remove());
   clone.querySelectorAll('.dimmed, .dim, .sel, .selected').forEach((el) => el.classList.remove('dimmed', 'dim', 'sel', 'selected'));
+  if (textScale !== 1) enlargeText(clone, textScale);
 
   // Items ride along belts with SMIL; replace that with positions we control per frame.
   const measure = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -90,7 +122,15 @@ function snapshotWorld() {
     }
     for (const g of gears) g.setAttribute('transform', `rotate(${(t * GEAR_TURN_PER_LOOP).toFixed(2)})`);
   };
-  return { clone, pose, dispose: () => measure.remove() };
+  /** Everything drawn, enlarged labels and area tags included, in world pixels. */
+  const bounds = (): Rect => {
+    measure.appendChild(clone);
+    const b = clone.getBBox();
+    clone.remove();
+    const pad = CELL / 2;
+    return { x: b.x - pad, y: b.y - pad, w: b.width + pad * 2, h: b.height + pad * 2 };
+  };
+  return { clone, pose, bounds, dispose: () => measure.remove() };
 }
 
 function buildSvg(clone: SVGGElement, region: Rect, css: string, withGrid: boolean): string {
@@ -149,11 +189,12 @@ function fitScale(region: Rect, preferred: number, maxSide: number) {
  * animated, seamlessly looping GIF and downloads it.
  */
 export async function exportFactory(format: ExportFormat, region?: Rect, opts: { grid?: boolean } = {}): Promise<void> {
-  const area = region ?? factoryBounds();
-  if (!area || area.w < 4 || area.h < 4) throw new Error('Nothing to export yet');
+  if (!region && !factoryBounds()) throw new Error('Nothing to export yet');
   const css = collectCss();
-  const snap = snapshotWorld();
+  const snap = snapshotWorld(format === 'gif' ? GIF_TEXT_SCALE : 1);
   try {
+    const area = region ?? snap.bounds();
+    if (area.w < 4 || area.h < 4) throw new Error('Nothing to export yet');
     if (format === 'png') {
       const scale = fitScale(area, PNG_SCALE, MAX_PNG_SIDE);
       snap.pose(0);
@@ -163,7 +204,7 @@ export async function exportFactory(format: ExportFormat, region?: Rect, opts: {
       download(blob, fileName('png'));
       return;
     }
-    const scale = fitScale(area, 1, MAX_GIF_SIDE);
+    const scale = fitScale(area, GIF_SCALE, MAX_GIF_SIDE);
     const w = Math.max(1, Math.round(area.w * scale));
     const h = Math.max(1, Math.round(area.h * scale));
     const gif = GIFEncoder();
