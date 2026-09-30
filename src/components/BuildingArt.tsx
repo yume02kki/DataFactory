@@ -122,60 +122,38 @@ export const BuildingArt = memo(function BuildingArt({ kind, cells, rotation = 0
   );
 });
 
-/** Liquid levels: buffers hold items for a while, stores keep them. */
-const TANK_LEVEL = { buffer: 0.5, store: 0.82 } as const;
-const WAVE = 16;
-
 /**
- * Buffers and stores are drawn as tanks rather than machines: a pill-shaped
- * vessel with a glass wall and liquid that settles at the bottom whichever way
- * the tank faces. Buffers are half full with items bobbing at the surface;
- * stores are nearly full, hooped like a silo, with items settled inside.
+ * Buffers and stores are drawn as tanks rather than machines: a fully rounded
+ * vessel (one block is round, a row is a capsule). Buffers show their queued
+ * items through round windows, one per block; stores carry the storage symbol.
  */
 function Tank({ kind, cells, color, queue }: { kind: 'buffer' | 'store'; cells: Pt[]; color: string; queue: ItemType[] }) {
   const round = CELL / 2;
-  const glass = outlinePath(cells, 6.5, round - 6.5);
-  const minX = Math.min(...cells.map((c) => c.x)) * CELL;
-  const minY = Math.min(...cells.map((c) => c.y)) * CELL;
-  const maxX = (Math.max(...cells.map((c) => c.x)) + 1) * CELL;
-  const maxY = (Math.max(...cells.map((c) => c.y)) + 1) * CELL;
-  const top = maxY - 6.5 - (maxY - minY - 13) * TANK_LEVEL[kind];
-  // A gently scrolling wave along the liquid's surface.
-  let wave = `M ${minX - WAVE * 2} ${top}`;
-  for (let x = minX - WAVE * 2; x < maxX + WAVE; x += WAVE) wave += ` q ${WAVE / 4} -2.2 ${WAVE / 2} 0 t ${WAVE / 2} 0`;
-  wave += ` V ${maxY + 2} H ${minX - WAVE * 2} Z`;
-  const clipId = `tank-${kind}-${cells.map((c) => `${c.x}_${c.y}`).join('-')}`.replace(/[^\w-]/g, 'm');
-  const liquid = kind === 'store' ? color : shade(color, 0.15);
-  const items = cells.slice(0, 8).map((c, i) => ({ c: cellCenter(c.x, c.y), item: queue.length ? queue[i % queue.length] : null }));
-
+  const dark = shade(color, -0.3);
+  const light = shade(color, 0.45);
+  const sym = symbolPoint(cells);
   return (
     <g className={`tank tank-${kind}`}>
       <path className="plate" d={outlinePath(cells, 2.5, round - 2.5)} fillRule="evenodd" />
-      <clipPath id={clipId}>
-        <path d={glass} fillRule="evenodd" />
-      </clipPath>
-      <path className="tank-glass" d={glass} fillRule="evenodd" />
-      <g clipPath={`url(#${clipId})`}>
-        <path className="tank-liquid wave" d={wave} fill={liquid} />
-        <path className="tank-surface wave" d={wave.slice(0, wave.indexOf(' V '))} stroke={shade(color, 0.5)} />
-        {kind === 'store' &&
-          // Silo hoops across the tank.
-          [0.3, 0.62].map((f) => (
-            <line key={f} className="tank-hoop" x1={minX} x2={maxX} y1={minY + (maxY - minY) * f} y2={minY + (maxY - minY) * f} />
-          ))}
-        {items.map(({ c, item }, i) => (
-          <g
-            key={i}
-            className={kind === 'buffer' ? 'bob' : undefined}
-            style={kind === 'buffer' ? { animationDelay: `${(i % 3) * 0.4}s` } : undefined}
-            transform={`translate(${c.x} ${kind === 'buffer' ? Math.max(c.y, top) : Math.max(c.y + 4, top + 7)})`}
-          >
-            {item ? <LayeredGlyph layers={lookOf(item)} r={5.5} strokeWidth={1.2} /> : <circle className="tank-bubble" r={2.5} />}
-          </g>
-        ))}
-      </g>
-      <path className="tank-rim" d={glass} fillRule="evenodd" />
-      <path className="tank-shine" d={outlinePath(cells, 10, round - 10)} fillRule="evenodd" />
+      <path className="body" d={outlinePath(cells, 6.5, round - 6.5)} fillRule="evenodd" fill={color} />
+      {kind === 'buffer' &&
+        cells.slice(0, 12).map((c, i) => {
+          const p = cellCenter(c.x, c.y);
+          const item = queue.length ? queue[i % queue.length] : null;
+          return (
+            <g key={i} transform={`translate(${p.x} ${p.y})`}>
+              <circle className="tank-window" r={8.5} />
+              {item ? <LayeredGlyph layers={lookOf(item)} r={4.8} strokeWidth={1.1} /> : <circle r={2.5} fill={dark} />}
+            </g>
+          );
+        })}
+      {kind === 'store' && (
+        <g className="body" fill="#fff" transform={`translate(${sym.x} ${sym.y})`}>
+          <path d="M -9 -6 L -9 6 A 9 3.2 0 0 0 9 6 L 9 -6" />
+          <path d="M -9 0 A 9 3.2 0 0 0 9 0" fill="none" />
+          <ellipse cx={0} cy={-6} rx={9} ry={3.2} fill={light} />
+        </g>
+      )}
     </g>
   );
 }

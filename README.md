@@ -39,9 +39,9 @@ rejected ones. Destroying a block that holds a shape together splits it into
 separate buildings. `R` rotates the whole shape. Buildings of different types
 placed directly in front of each other hand items over without a belt.
 
-Buffers and stores are drawn as **tanks**, not machines: rounded vessels with
-liquid inside. A buffer is half full, with its queued items bobbing at the
-surface. A store is nearly full and hooped like a silo, because data stays there.
+Buffers and stores are drawn as **tanks**, not machines: fully rounded vessels
+(one block is round, a row is a capsule). Buffers show their queued items through
+a round window in each block. Stores carry the storage symbol.
 
 ### Combining item looks
 

@@ -1696,74 +1696,8 @@ select:focus {
 
 /* ---------- tanks (buffers and stores) ---------- */
 
-.tank-glass {
-  fill: #f6f8fb;
-}
-
-.tank-rim {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1.8;
-}
-
-.tank-liquid {
-  opacity: 0.92;
-}
-
-.tank-surface {
-  fill: none;
-  stroke-width: 1.6;
-}
-
-.tank-hoop {
-  stroke: var(--ink);
-  stroke-width: 1.4;
-  opacity: 0.35;
-}
-
-.tank-shine {
-  fill: none;
-  stroke: #fff;
-  stroke-width: 1.6;
-  stroke-dasharray: 5 40;
-  opacity: 0.8;
-  pointer-events: none;
-}
-
-.tank-bubble {
+.tank-window {
   fill: #fff;
-  opacity: 0.7;
-}
-
-.flowing .wave {
-  animation: wave 1.6s linear infinite;
-}
-
-.flowing .bob {
-  animation: bob 1.8s ease-in-out infinite;
-}
-
-.bob {
-  transform-box: fill-box;
-}
-
-.kind-icon.still .wave,
-.kind-icon.still .bob {
-  animation: none !important;
-}
-
-@keyframes wave {
-  to {
-    transform: translateX(16px);
-  }
-}
-
-@keyframes bob {
-  0%,
-  100% {
-    translate: 0 0;
-  }
-  50% {
-    translate: 0 -2px;
-  }
+  stroke: var(--ink);
+  stroke-width: 1.6;
 }
