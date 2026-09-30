@@ -121,6 +121,43 @@ export function paintBelt(p: Pipeline, cells: Array<Pt & { dir: Dir }>): number 
   return changed;
 }
 
+/** Direction of a single grid step from `a` to the neighbouring cell `b`. */
+export function stepDir(a: Pt, b: Pt): Dir {
+  return b.x > a.x ? 0 : b.x < a.x ? 2 : b.y > a.y ? 1 : 3;
+}
+
+/** Neighbouring cells from `a` to `b`, one grid step at a time (fast drags can skip cells). */
+export function gridSteps(a: Pt, b: Pt): Pt[] {
+  const out: Pt[] = [];
+  const cur = { ...a };
+  while (cur.x !== b.x || cur.y !== b.y) {
+    // Walk along whichever axis has further to go, so the trail hugs the cursor's path.
+    if (Math.abs(b.x - cur.x) >= Math.abs(b.y - cur.y)) cur.x += Math.sign(b.x - cur.x);
+    else cur.y += Math.sign(b.y - cur.y);
+    out.push({ ...cur });
+  }
+  return out;
+}
+
+/**
+ * One step of dragging a belt, the way shapez does it: the tile behind turns
+ * to point into the new cell (becoming a corner if the drag changed direction)
+ * and a tile pointing the way of travel is laid in the new cell. Buildings are
+ * never painted over; the tile before one just points into it.
+ */
+export function extendBelt(p: Pipeline, from: Pt, to: Pt): boolean {
+  const dir = stepDir(from, to);
+  const occ = occupancy(p);
+  let changed = false;
+  const prev = occ.get(cellKey(from.x, from.y))?.tile;
+  if (prev && prev.dir !== dir) {
+    prev.dir = dir;
+    changed = true;
+  }
+  if (occ.get(cellKey(to.x, to.y))?.node) return changed;
+  return paintBelt(p, [{ ...to, dir }]) > 0 || changed;
+}
+
 /** Removes whatever sits on a cell. Returns what was removed. */
 export function eraseCell(p: Pipeline, x: number, y: number): 'node' | 'tile' | null {
   const tileIdx = p.belts.findIndex((t) => t.x === x && t.y === y);

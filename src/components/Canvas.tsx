@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ARROW_COLOR, KIND_META } from '../model/defaults';
-import { CELL, cellKey, lPath, nodeRect, normalizeRect, rectsIntersect, type Pt, type Rect } from '../model/geometry';
+import { CELL, cellKey, nodeRect, normalizeRect, rectsIntersect, type Pt, type Rect } from '../model/geometry';
 import * as ops from '../model/ops';
 import type { Dir, NodeKind } from '../model/types';
 import { useFactory } from '../store/useFactory';
@@ -29,7 +29,7 @@ export type DragPayload = { type: 'item'; id: string };
 
 type Gesture =
   | { type: 'pan'; sx: number; sy: number; vx: number; vy: number; moved: boolean; clearOnClick: boolean }
-  | { type: 'paint'; start: Pt; axis: 'h' | 'v' | null }
+  | { type: 'paint'; last: Pt; changed: boolean }
   | { type: 'place'; last: Pt; placed: number }
   | { type: 'erase'; last: Pt; erased: boolean; moved: boolean }
   | {
@@ -77,7 +77,6 @@ export function Canvas() {
   const gesture = useRef<Gesture | null>(null);
   const spaceHeld = useRef(false);
   const [hover, setHover] = useState<Pt | null>(null);
-  const [paintPreview, setPaintPreview] = useState<Array<Pt & { dir: Dir }> | null>(null);
   const [marquee, setMarquee] = useState<Rect | null>(null);
   const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
   const [panning, setPanning] = useState(false);
@@ -126,10 +125,7 @@ export function Canvas() {
         spaceHeld.current = true;
         e.preventDefault();
       }
-      if (e.key === 'Escape' && gesture.current?.type === 'paint') {
-        gesture.current = null;
-        setPaintPreview(null);
-      }
+      if (e.key === 'Escape' && gesture.current?.type === 'paint') gesture.current = null;
     };
     const up = (e: KeyboardEvent) => {
       if (e.code === 'Space') spaceHeld.current = false;
@@ -215,8 +211,11 @@ export function Canvas() {
     }
 
     if (tool?.type === 'belt') {
-      gesture.current = { type: 'paint', start: cell, axis: null };
-      setPaintPreview(lPath(cell, cell, 'h', state.rotation));
+      // Belts are laid live as the cursor moves, like shapez: first tile points the current way.
+      state.checkpoint();
+      let changed = false;
+      state.edit((p) => void (changed = ops.paintBelt(p, [{ ...cell, dir: state.rotation }]) > 0), { history: false });
+      gesture.current = { type: 'paint', last: cell, changed };
       return;
     }
 
@@ -280,8 +279,21 @@ export function Canvas() {
     }
 
     if (g.type === 'paint') {
-      if (!g.axis && (cell.x !== g.start.x || cell.y !== g.start.y)) g.axis = Math.abs(cell.x - g.start.x) >= Math.abs(cell.y - g.start.y) ? 'h' : 'v';
-      setPaintPreview(lPath(g.start, cell, g.axis ?? 'h', state.rotation));
+      if (cell.x === g.last.x && cell.y === g.last.y) return;
+      const steps = ops.gridSteps(g.last, cell);
+      let from = g.last;
+      state.edit(
+        (p) => {
+          for (const to of steps) {
+            if (ops.extendBelt(p, from, to)) g.changed = true;
+            from = to;
+          }
+        },
+        { history: false },
+      );
+      // Keep building in the direction of travel.
+      useFactory.setState({ rotation: ops.stepDir(steps.length > 1 ? steps[steps.length - 2] : g.last, cell) });
+      g.last = cell;
       return;
     }
 
@@ -363,12 +375,8 @@ export function Canvas() {
     if (g.type === 'pan' && !g.moved && g.clearOnClick) {
       state.clearSelection();
     } else if (g.type === 'paint') {
-      const cells = paintPreview ?? [];
-      setPaintPreview(null);
-      state.paintBelt(cells);
-      // Keep drawing in the direction we were going, like shapez.
-      const last = cells[cells.length - 1];
-      if (last) useFactory.setState({ rotation: last.dir });
+      if (g.changed) state.edit((p) => ops.syncLinkItems(p), { history: false });
+      else useFactory.setState((s) => ({ past: s.past.slice(0, -1) }));
     } else if (g.type === 'place') {
       if (!g.placed) {
         useFactory.setState((s) => ({ past: s.past.slice(0, -1) }));
@@ -479,7 +487,7 @@ export function Canvas() {
   const ghost = useMemo(() => {
     if (!hover || !tool || gesture.current?.type === 'erase') return null;
     if (tool.type === 'belt') {
-      if (paintPreview) return null;
+      if (gesture.current?.type === 'paint') return null;
       return { belt: [{ id: 'ghost', x: hover.x, y: hover.y, dir: rotation, itemId: null, description: '' }] };
     }
     if (tool.type !== 'building') return null;
@@ -489,10 +497,10 @@ export function Canvas() {
     const valid = ops.canPlaceNode(pipeline, at.x, at.y);
     const icon = tool.template ? tool.template.icon : blueprint?.icon;
     return { building: { kind: tool.kind as NodeKind, at, color, valid, icon } };
-  }, [hover, tool, rotation, pipeline, paintPreview]);
+  }, [hover, tool, rotation, pipeline]);
 
   const previewTiles = useMemo(() => {
-    const cells = paintPreview ?? ghost?.belt;
+    const cells = ghost?.belt;
     if (!cells) return null;
     const tiles = cells
       .filter((c) => !occupancy.get(cellKey(c.x, c.y))?.node)
@@ -501,7 +509,7 @@ export function Canvas() {
     const inflowPreview = new Map<string, Dir>();
     tiles.forEach((t, i) => inflowPreview.set(t.id, i > 0 ? tiles[i - 1].dir : t.dir));
     return { tiles, inflow: inflowPreview };
-  }, [paintPreview, ghost, occupancy]);
+  }, [ghost, occupancy]);
 
   const cellPx = CELL * view.zoom;
   // Belt labels only for the belt under the cursor or the selected one; the item shapes speak for themselves.

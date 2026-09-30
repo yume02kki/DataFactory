@@ -416,3 +416,48 @@ describe('link arrows', () => {
     expect(again.arrows[0]).toMatchObject({ from: src.id, to: mac.id, label: 'reads from', dashed: false });
   });
 });
+
+describe('dragging belts like shapez', () => {
+  const drag = (path: Array<[number, number]>) => {
+    const p = blankPipeline();
+    ops.paintBelt(p, [{ x: path[0][0], y: path[0][1], dir: 2 }]);
+    for (let i = 1; i < path.length; i++) {
+      const from = { x: path[i - 1][0], y: path[i - 1][1] };
+      const to = { x: path[i][0], y: path[i][1] };
+      let cur = from;
+      for (const step of ops.gridSteps(from, to)) {
+        ops.extendBelt(p, cur, step);
+        cur = step;
+      }
+    }
+    return Object.fromEntries(p.belts.map((t) => [`${t.x},${t.y}`, t.dir]));
+  };
+
+  it('lays tiles pointing the way the cursor moves (frame 1)', () => {
+    expect(drag([[3, 0], [2, 0], [1, 0]])).toEqual({ '3,0': 2, '2,0': 2, '1,0': 2 });
+  });
+
+  it('turns the tile behind into a corner when the drag changes direction (frame 2)', () => {
+    expect(drag([[3, 0], [2, 0], [2, 1], [2, 2]])).toEqual({ '3,0': 2, '2,0': 1, '2,1': 1, '2,2': 1 });
+  });
+
+  it('turns again when heading off the other way (frame 3)', () => {
+    expect(drag([[3, 0], [2, 0], [2, 1], [1, 1], [0, 1]])).toEqual({ '3,0': 2, '2,0': 1, '2,1': 2, '1,1': 2, '0,1': 2 });
+  });
+
+  it('fills in cells a fast drag skipped, never jumping diagonally', () => {
+    const tiles = drag([[0, 0], [3, 2]]);
+    expect(Object.keys(tiles)).toHaveLength(6);
+    expect(ops.gridSteps({ x: 0, y: 0 }, { x: 2, y: 1 })).toEqual([{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1 }]);
+  });
+
+  it('points into a building instead of painting over it', () => {
+    const { p, mac } = tinyFactory(); // machine at (4,0)
+    ops.paintBelt(p, [{ x: 3, y: 1, dir: 3 }]);
+    ops.extendBelt(p, { x: 3, y: 1 }, { x: 3, y: 0 });
+    ops.extendBelt(p, { x: 3, y: 0 }, { x: 4, y: 0 });
+    expect(p.belts.find((t) => t.x === 3 && t.y === 0)?.dir).toBe(0);
+    expect(p.belts.some((t) => t.x === 4 && t.y === 0)).toBe(false);
+    expect(p.nodes.find((n) => n.id === mac.id)).toBeDefined();
+  });
+});

@@ -96,7 +96,7 @@ It plays like shapez.io: pick a tool, left-click to build, right-click to destro
 | Pick a tool | Hotbar at the bottom: `1` Belt, `2` Source, `3` Machine, `4` Buffer, `5` Store, `6` Link. Clicking a palette tile picks that component type |
 | Build | Left-click the floor, or left-drag to paint blocks. Matching blocks that touch join into one building of any shape. A ghost shows where it will go and turns red when something is in the way |
 | Rotate | `R` / `Shift R` rotates the tool, the selected buildings, or the belt under the cursor |
-| Lay belts | With the belt tool, left-drag. Belts follow an L-shaped path and point the way you drag |
+| Lay belts | With the belt tool, left-drag: each tile is laid as the cursor enters its cell, pointing the way you move; changing direction turns the tile behind into a corner (as in shapez) |
 | Connect | Items leave a building from the side with outward arrow tabs and enter from the side with inward tabs. A belt from one building's output side into another's input side connects them. A belt that stops short shows a red end |
 | Destroy | Right-click, or right-drag to destroy several things |
 | Put the tool away | Right-click empty floor, or `Esc` |
