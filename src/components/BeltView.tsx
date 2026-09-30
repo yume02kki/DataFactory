@@ -11,6 +11,8 @@ export const BELT_SPEED = 42;
 const ITEM_SPACING = CELL * 1.25;
 const LABEL_FONT = '600 11px Inter, system-ui, sans-serif';
 const HALF = CELL / 2;
+/** How far each belt tile overlaps its neighbours, in world pixels. */
+const SEAM = 0.75;
 
 /** Chevrons per tile, and how long the belt takes to move one chevron along (in step with items). */
 const CHEVRONS_PER_TILE = 4;
@@ -24,11 +26,15 @@ export function tilePath(x: number, y: number, dir: Dir, inflow: Dir): string {
   const [ox, oy] = DV[dir];
   const entry = { x: c.x + ix * HALF, y: c.y + iy * HALF };
   const exit = { x: c.x + ox * HALF, y: c.y + oy * HALF };
-  if (inflow === dir) return `M ${entry.x} ${entry.y} L ${exit.x} ${exit.y}`;
+  // Each tile reaches a hair past its cell on both ends so neighbours overlap
+  // instead of meeting exactly on the edge, where anti-aliasing leaves a seam.
+  const before = { x: entry.x + ix * SEAM, y: entry.y + iy * SEAM };
+  const after = { x: exit.x + ox * SEAM, y: exit.y + oy * SEAM };
+  if (inflow === dir) return `M ${before.x} ${before.y} L ${after.x} ${after.y}`;
   // Clockwise on screen when turning right relative to the direction of travel.
   const [tx, ty] = DV[inflow];
   const sweep = tx * oy - ty * ox > 0 ? 1 : 0;
-  return `M ${entry.x} ${entry.y} A ${HALF} ${HALF} 0 0 ${sweep} ${exit.x} ${exit.y}`;
+  return `M ${before.x} ${before.y} L ${entry.x} ${entry.y} A ${HALF} ${HALF} 0 0 ${sweep} ${exit.x} ${exit.y} L ${after.x} ${after.y}`;
 }
 
 interface TileChevrons {
