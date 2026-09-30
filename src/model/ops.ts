@@ -2,15 +2,16 @@ import { KIND_META } from './defaults';
 import {
   CELL,
   DV,
-  anchorFor,
   cellCenter,
   cellKey,
-  footprint,
-  lineAxis,
+  connectedGroups,
   nodeCells,
+  nodeRect,
+  normalizeOffsets,
   opposite,
   outputCells,
   rotateDir,
+  rotateOffsets,
   type Pt,
 } from './geometry';
 import { uid } from './ids';
@@ -33,10 +34,10 @@ export function occupancy(p: Pipeline): Map<string, Occupant> {
   return map;
 }
 
-/** True when a building row fits at (x, y) without covering anything except ignored ids. */
-export function canPlaceNode(p: Pipeline, x: number, y: number, rotation: Dir, size = 1, ignore: Set<string> = new Set()): boolean {
+/** True when every cell is free, apart from things with an ignored id. */
+export function canPlaceCells(p: Pipeline, cells: Pt[], ignore: Set<string> = new Set()): boolean {
   const occ = occupancy(p);
-  return nodeCells({ x, y, rotation, size }).every((c) => {
+  return cells.every((c) => {
     const o = occ.get(cellKey(c.x, c.y));
     if (!o) return true;
     const id = o.node?.id ?? o.tile?.id;
@@ -44,40 +45,49 @@ export function canPlaceNode(p: Pipeline, x: number, y: number, rotation: Dir, s
   });
 }
 
-/** Whether two blocks are the same component and may join into one wide block. */
+/** True when a single block fits at (x, y). */
+export function canPlaceNode(p: Pipeline, x: number, y: number): boolean {
+  return canPlaceCells(p, [{ x, y }]);
+}
+
+/** Whether two blocks are the same component and may join into one building. */
 function sameComponent(a: Pick<FactoryNode, 'kind' | 'rotation' | 'type'>, b: Pick<FactoryNode, 'kind' | 'rotation' | 'type'>) {
   return a.kind === b.kind && a.rotation === b.rotation && a.type.trim() === b.type.trim();
 }
 
+/** Sets a node's cells from absolute positions, re-anchoring at the top-left. */
+export function setNodeCells(node: FactoryNode, cells: Pt[]) {
+  const { cells: offsets, dx, dy } = normalizeOffsets(cells.map((c) => [c.x, c.y] as [number, number]));
+  node.x = dx;
+  node.y = dy;
+  node.cells = offsets;
+}
+
 /**
- * Places a 1×1 block. If it sits beside the end of a matching block row
- * (same kind, type and facing, across the flow) it widens that row instead,
- * joining two rows when it bridges them. Returns the id of the node it became
- * part of, or null when the cell is taken.
+ * Places a 1×1 block. If it touches a matching building (same kind, type and
+ * facing) on any side it becomes part of it, and a block touching several
+ * matching buildings fuses them into one. Returns the id of the building it
+ * ends up in, or null when the cell is taken.
  */
 export function placeBlock(p: Pipeline, block: FactoryNode): string | null {
-  const { x, y, rotation } = block;
-  if (!canPlaceNode(p, x, y, rotation)) return null;
-  const [ax, ay] = lineAxis(rotation);
-  const before = p.nodes.find((n) => sameComponent(n, block) && n.x + ax * n.size === x && n.y + ay * n.size === y);
-  const after = p.nodes.find((n) => sameComponent(n, block) && n.x === x + ax && n.y === y + ay);
-  if (before) {
-    before.size += 1;
-    if (after) {
-      before.size += after.size;
-      mergeInto(before, after);
-      p.nodes = p.nodes.filter((n) => n.id !== after.id);
-    }
-    return before.id;
+  const { x, y } = block;
+  if (!canPlaceNode(p, x, y)) return null;
+  const around = new Set(DV.map(([dx, dy]) => cellKey(x + dx, y + dy)));
+  const touching = p.nodes.filter((n) => sameComponent(n, block) && nodeCells(n).some((c) => around.has(cellKey(c.x, c.y))));
+  if (!touching.length) {
+    p.nodes.push({ ...block, cells: [[0, 0]] });
+    return block.id;
   }
-  if (after) {
-    after.x = x;
-    after.y = y;
-    after.size += 1;
-    return after.id;
+  const [target, ...others] = touching;
+  const cells = [...nodeCells(target), { x, y }];
+  for (const o of others) {
+    cells.push(...nodeCells(o));
+    mergeInto(target, o);
   }
-  p.nodes.push({ ...block, size: 1 });
-  return block.id;
+  setNodeCells(target, cells);
+  const gone = new Set(others.map((o) => o.id));
+  p.nodes = p.nodes.filter((n) => !gone.has(n.id));
+  return target.id;
 }
 
 function mergeInto(target: FactoryNode, other: FactoryNode) {
@@ -120,33 +130,25 @@ export function eraseCell(p: Pipeline, x: number, y: number): 'node' | 'tile' | 
   }
   const node = p.nodes.find((n) => nodeCells(n).some((c) => c.x === x && c.y === y));
   if (!node) return null;
-  if (node.size <= 1) {
+  const rest = nodeCells(node).filter((c) => c.x !== x || c.y !== y);
+  if (!rest.length) {
     removeNodes(p, [node.id]);
     return 'node';
   }
-  // Remove one block from a wide building: shrink it, or split it in two.
-  const [ax, ay] = lineAxis(node.rotation);
-  const i = ax ? x - node.x : y - node.y;
-  if (i === 0) {
-    node.x += ax;
-    node.y += ay;
-    node.size -= 1;
-  } else if (i === node.size - 1) {
-    node.size -= 1;
-  } else {
-    const rest: FactoryNode = {
+  // Removing a block can cut a building in two (or more): each piece becomes its own building.
+  const [keep, ...pieces] = connectedGroups(rest);
+  setNodeCells(node, keep);
+  for (const piece of pieces) {
+    const copy: FactoryNode = {
       ...node,
       id: uid('node'),
       name: copyName(p, node.name),
-      x: node.x + ax * (i + 1),
-      y: node.y + ay * (i + 1),
-      size: node.size - i - 1,
       inputs: [...node.inputs],
       outputs: [...node.outputs],
       metadata: node.metadata.map((m) => ({ ...m, id: uid('m') })),
     };
-    node.size = i;
-    p.nodes.push(rest);
+    setNodeCells(copy, piece);
+    p.nodes.push(copy);
   }
   return 'node';
 }
@@ -324,19 +326,25 @@ export function canMove(p: Pipeline, nodeIds: string[], tileIds: string[], dx: n
   return true;
 }
 
-/** Rotates buildings in place around their centre; ones that would collide stay put. */
+/** Rotates buildings (shape and facing) around their centre; ones that would collide stay put. */
 export function rotateNodes(p: Pipeline, ids: string[], steps: number): number {
   let rotated = 0;
   for (const n of p.nodes) {
     if (!ids.includes(n.id)) continue;
-    const f = footprint(n.rotation, n.size);
-    const center = { x: n.x + Math.floor(f.w / 2), y: n.y + Math.floor(f.h / 2) };
-    const rotation = rotateDir(n.rotation, steps);
-    const at = anchorFor(rotation, n.size, center);
-    if (!canPlaceNode(p, at.x, at.y, rotation, n.size, new Set([n.id]))) continue;
-    n.rotation = rotation;
-    n.x = at.x;
-    n.y = at.y;
+    const before = nodeRect(n);
+    const cells = rotateOffsets(n.cells, steps);
+    const w = Math.max(...cells.map((c) => c[0])) + 1;
+    const h = Math.max(...cells.map((c) => c[1])) + 1;
+    const cx = before.x / CELL + before.w / CELL / 2;
+    const cy = before.y / CELL + before.h / CELL / 2;
+    const x = Math.round(cx - w / 2);
+    const y = Math.round(cy - h / 2);
+    const abs = cells.map(([dx, dy]) => ({ x: x + dx, y: y + dy }));
+    if (!canPlaceCells(p, abs, new Set([n.id]))) continue;
+    n.rotation = rotateDir(n.rotation, steps);
+    n.x = x;
+    n.y = y;
+    n.cells = cells;
     rotated++;
   }
   return rotated;
@@ -346,7 +354,7 @@ export function rotateNodes(p: Pipeline, ids: string[], steps: number): number {
 export function freeOffset(p: Pipeline, nodeIds: string[], tileIds: string[]): { dx: number; dy: number } {
   const nodes = p.nodes.filter((n) => nodeIds.includes(n.id));
   const tiles = p.belts.filter((t) => tileIds.includes(t.id));
-  const ys = [...nodes.flatMap((n) => [n.y, n.y + footprint(n.rotation, n.size).h]), ...tiles.flatMap((t) => [t.y, t.y + 1])];
+  const ys = [...nodes.flatMap((n) => [n.y, (nodeRect(n).y + nodeRect(n).h) / CELL]), ...tiles.flatMap((t) => [t.y, t.y + 1])];
   const height = ys.length ? Math.max(...ys) - Math.min(...ys) : 1;
   const occ = occupancy(p);
   const free = (x: number, y: number) => !occ.has(cellKey(x, y));
@@ -369,6 +377,7 @@ export function duplicate(p: Pipeline, nodeIds: string[], tileIds: string[], dx:
       id: uid('node'),
       x: n.x + dx,
       y: n.y + dy,
+      cells: n.cells.map((c) => [c[0], c[1]] as [number, number]),
       inputs: [...n.inputs],
       outputs: [...n.outputs],
       metadata: n.metadata.map((m) => ({ ...m, id: uid('m') })),

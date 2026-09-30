@@ -131,7 +131,7 @@ export function makeNode(
     x,
     y,
     rotation,
-    size: 1,
+    cells: [[0, 0]],
     inputs: [],
     outputs: [],
     metadata: [],
@@ -253,7 +253,10 @@ export function examplePipeline(): Pipeline {
     metadata: [{ id: uid('m'), key: 'retention', value: '7 days' }],
   });
   const validate = node('machine', 'Validator', 'Validation Machine', 'Stream processor', 15, 0, {
-    size: 2,
+    cells: [
+      [0, 0],
+      [0, 1],
+    ],
     inputs: [enriched.id],
     outputs: [valid.id, invalid.id],
     description: 'Drops bots and malformed visits.',
@@ -298,7 +301,7 @@ export function examplePipeline(): Pipeline {
   lay(visit.id, [1, 0], [4, 0]);
   lay(enriched.id, [6, 0], [9, 0]);
   lay(enriched.id, [11, 0], [14, 0]);
-  // The validator is two blocks wide: one output port per result.
+  // The validator is two blocks: one output port per result.
   lay(valid.id, [16, 0], [19, 0]);
   lay(invalid.id, [16, 1], [17, 1], [17, 5], [19, 5]);
   lay(summary.id, [21, 0], [24, 0]);

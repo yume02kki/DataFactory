@@ -60,10 +60,11 @@ export interface FactoryNode {
   /** Direction items flow through the building: in at the back, out at the front. */
   rotation: Dir;
   /**
-   * Number of 1×1 blocks side by side, across the flow. Blocks placed next to
-   * each other merge into one wide block with one port per block on each side.
+   * The 1×1 blocks this building is made of, as [dx, dy] offsets from (x, y).
+   * Any connected shape works: blocks placed next to a matching building join it.
+   * Every exposed front face is an output port and every exposed back face an input port.
    */
-  size: number;
+  cells: Array<[number, number]>;
   /** Item type ids this component consumes. */
   inputs: string[];
   /** Item type ids this component produces. */

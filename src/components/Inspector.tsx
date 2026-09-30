@@ -4,6 +4,7 @@ import { uid } from '../model/ids';
 import * as ops from '../model/ops';
 import type { FactoryNode, ItemType, Pipeline } from '../model/types';
 import { BeltIcon } from './Hotbar';
+import { inputCells, outputCells } from '../model/geometry';
 import { useFactory } from '../store/useFactory';
 import { ItemIcon } from './ItemGlyph';
 import { KindIcon } from './KindIcon';
@@ -166,6 +167,14 @@ function technologies(p: Pipeline): string[] {
 
 /* ---------- node ---------- */
 
+function portSummary(node: FactoryNode): string {
+  const meta = KIND_META[node.kind];
+  const parts: string[] = [];
+  if (meta.hasInput) parts.push(`${inputCells(node).length} in`);
+  if (meta.hasOutput) parts.push(`${outputCells(node).length} out`);
+  return parts.join(' / ');
+}
+
 function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline: Pipeline; links: ops.Link[] }) {
   const meta = KIND_META[node.kind];
   const itemsById = useMemo(() => new Map(pipeline.items.map((i) => [i.id, i])), [pipeline.items]);
@@ -198,7 +207,7 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
 
   return (
     <div className="insp-body">
-      <Header icon={<KindIcon kind={node.kind} color={node.color} size={40} />} eyebrow={node.size > 1 ? `${meta.label} · ${node.size} blocks wide · ${node.size} ports per side` : meta.label} title={node.name || meta.label} />
+      <Header icon={<KindIcon kind={node.kind} color={node.color} size={40} />} eyebrow={node.cells.length > 1 ? `${meta.label} · ${node.cells.length} blocks · ${portSummary(node)}` : meta.label} title={node.name || meta.label} />
 
       <Field label="Name">
         <input value={node.name} onChange={(e) => set('name', e.target.value)} placeholder={`e.g. ${meta.label} name`} />

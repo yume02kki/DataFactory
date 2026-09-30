@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { shade } from '../lib/color';
 import { KIND_META } from '../model/defaults';
-import { CELL } from '../model/geometry';
+import { CELL, DV, cellCenter, inputCells, opposite, outlinePath, outputCells, type Pt } from '../model/geometry';
 import type { Dir, ItemType, NodeKind } from '../model/types';
 import { ItemGlyph } from './ItemGlyph';
 
@@ -28,9 +28,9 @@ function gearPath(outer: number, inner: number, teeth: number): string {
 const GEAR = gearPath(9.5, 7, 8);
 
 /** A small dark tab on the block edge with an arrow showing flow direction. */
-function PortTab({ x, y }: { x: number; y: number }) {
+function PortTab({ x, y, rotation }: { x: number; y: number; rotation: Dir }) {
   return (
-    <g className="port-tab" transform={`translate(${x} ${y})`}>
+    <g className="port-tab" transform={`translate(${x} ${y}) rotate(${rotation * 90})`}>
       <rect x={-3.5} y={-6.5} width={7} height={13} rx={2} />
       <path d="M -1.5 -3 L 2 0 L -1.5 3 Z" />
     </g>
@@ -84,8 +84,8 @@ function KindSymbol({ kind, color, queue }: { kind: NodeKind; color: string; que
 
 interface Props {
   kind: NodeKind;
-  /** Blocks in the row. */
-  size?: number;
+  /** Absolute grid cells making up the building (any connected shape). */
+  cells: Pt[];
   rotation?: Dir;
   color: string;
   /** Items shown queued inside a buffer. */
@@ -93,29 +93,49 @@ interface Props {
   ports?: boolean;
 }
 
+/** Where the symbol goes: the shape's centre when that lies inside it (e.g. a 2×2), else the block nearest to it. */
+function symbolPoint(cells: Pt[]): Pt {
+  const mx = cells.reduce((a, c) => a + c.x, 0) / cells.length + 0.5;
+  const my = cells.reduce((a, c) => a + c.y, 0) / cells.length + 0.5;
+  const own = new Set(cells.map((c) => `${c.x},${c.y}`));
+  const inside = [-0.01, 0.01].every((ox) => [-0.01, 0.01].every((oy) => own.has(`${Math.floor(mx + ox)},${Math.floor(my + oy)}`)));
+  if (inside) return { x: mx * CELL, y: my * CELL };
+  const best = cells.reduce((b, c) => (Math.hypot(c.x + 0.5 - mx, c.y + 0.5 - my) < Math.hypot(b.x + 0.5 - mx, b.y + 0.5 - my) ? c : b), cells[0]);
+  return cellCenter(best.x, best.y);
+}
+
 /**
- * A building: `size` 1×1 blocks joined into one plate, drawn flowing
- * left → right and rotated into place. The symbol always stays upright.
+ * A building drawn in world coordinates: all its blocks share one outlined
+ * plate, so any shape reads as a single building. Every exposed back face gets
+ * an input tab and every exposed front face an output tab; the symbol stays upright.
  */
-export const BuildingArt = memo(function BuildingArt({ kind, size = 1, rotation = 0, color, queue = [], ports = true }: Props) {
-  const W = CELL;
-  const H = CELL * size;
+export const BuildingArt = memo(function BuildingArt({ kind, cells, rotation = 0, color, queue = [], ports = true }: Props) {
   const meta = KIND_META[kind];
-  const inset = 5;
-  const bodyR = kind === 'buffer' ? Math.min(W, H) / 2 - inset : 5;
+  const node = { x: 0, y: 0, cells: cells.map((c) => [c.x, c.y] as [number, number]), rotation };
+  const [fx, fy] = DV[rotation];
+  const tab = (outside: Pt, side: Dir, inward: number) => {
+    // Tab sits on the face between the outside cell and the building's cell next to it.
+    const [sx, sy] = DV[side];
+    const c = cellCenter(outside.x - sx, outside.y - sy);
+    const x = c.x + (sx * CELL) / 2 + fx * inward;
+    const y = c.y + (sy * CELL) / 2 + fy * inward;
+    return <PortTab key={`${side}:${outside.x},${outside.y}`} x={x} y={y} rotation={rotation} />;
+  };
+  const sym = symbolPoint(cells);
+  const back = opposite(rotation);
 
   return (
-    <g className={`art art-${kind}`} transform={`rotate(${rotation * 90}) translate(${-W / 2} ${-H / 2})`}>
-      {ports &&
-        Array.from({ length: size }, (_, i) => (
-          <g key={i}>
-            {meta.hasInput && <PortTab x={1.5} y={(i + 0.5) * CELL} />}
-            {meta.hasOutput && <PortTab x={W - 1.5} y={(i + 0.5) * CELL} />}
-          </g>
-        ))}
-      <rect className="plate" x={2.5} y={2.5} width={W - 5} height={H - 5} rx={7} />
-      <rect className="body" x={inset + 2} y={inset + 2} width={W - inset * 2 - 4} height={H - inset * 2 - 4} rx={bodyR} fill={kind === 'source' ? shade(color, 0.45) : color} />
-      <g transform={`translate(${W / 2} ${H / 2}) rotate(${-rotation * 90})`}>
+    <g className={`art art-${kind}`}>
+      {ports && meta.hasInput && inputCells(node).map((c) => tab(c, back, 1.5))}
+      {ports && meta.hasOutput && outputCells(node).map((c) => tab(c, rotation, -1.5))}
+      <path className="plate" d={outlinePath(cells, 2.5, 7)} fillRule="evenodd" />
+      <path
+        className="body"
+        d={outlinePath(cells, 7, kind === 'buffer' ? 11 : 5)}
+        fillRule="evenodd"
+        fill={kind === 'source' ? shade(color, 0.45) : color}
+      />
+      <g transform={`translate(${sym.x} ${sym.y})`}>
         <KindSymbol kind={kind} color={color} queue={queue} />
       </g>
     </g>

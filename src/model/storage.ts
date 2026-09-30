@@ -1,6 +1,6 @@
 import { KIND_META, NODE_KINDS, ITEM_SHAPES, starterBlueprints } from './defaults';
 import { uid } from './ids';
-import { inputCells, lPath, outputCells } from './geometry';
+import { inputCells, lPath, normalizeOffsets, outputCells } from './geometry';
 import { paintBelt } from './ops';
 import type { BeltTile, Blueprint, Dir, FactoryNode, ItemType, Pipeline } from './types';
 
@@ -134,7 +134,7 @@ export function normalizePipeline(input: unknown): Pipeline {
         x: Math.round(num(o.x)),
         y: Math.round(num(o.y)),
         rotation: ([0, 1, 2, 3].includes(o.rotation as number) ? o.rotation : 0) as Dir,
-        size: Math.max(1, Math.min(64, Math.round(num(o.size, 1)))),
+        cells: readCells(o, ([0, 1, 2, 3].includes(o.rotation as number) ? o.rotation : 0) as Dir),
         inputs: KIND_META[kind].hasInput ? ids(o.inputs) : [],
         outputs: KIND_META[kind].hasOutput ? ids(o.outputs) : [],
         metadata: arr(o.metadata).map((m) => {
@@ -207,6 +207,19 @@ function migrateLinkBelts(p: Pipeline, raw: Record<string, unknown>[], itemIds: 
     const first = p.belts.find((t) => t.x === a.x && t.y === a.y);
     if (first && p.belts.length > before && typeof o.itemId === 'string' && itemIds.has(o.itemId)) first.itemId = o.itemId;
   }
+}
+
+/**
+ * A building's blocks. Accepts `cells` offsets, or the older `size` (a straight
+ * row across the flow); anything unusable becomes a single block.
+ */
+function readCells(o: Record<string, unknown>, rotation: Dir): Array<[number, number]> {
+  const raw = arr(o.cells)
+    .filter((c): c is [number, number] => Array.isArray(c) && c.length === 2 && c.every((v) => typeof v === 'number' && Number.isFinite(v)))
+    .map(([x, y]) => [Math.round(x), Math.round(y)] as [number, number]);
+  if (raw.length) return normalizeOffsets(raw.slice(0, 1024)).cells;
+  const size = Math.max(1, Math.min(64, Math.round(num(o.size, 1))));
+  return Array.from({ length: size }, (_, i) => (rotation % 2 === 0 ? [0, i] : [i, 0]) as [number, number]);
 }
 
 export function downloadPipeline(p: Pipeline): void {

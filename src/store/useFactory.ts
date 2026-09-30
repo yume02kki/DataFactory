@@ -48,7 +48,7 @@ export interface FactoryState {
   /** R: rotates the ghost while building, otherwise the selected buildings. */
   rotate: (steps: number, hoverCell?: Pt | null) => void;
 
-  /** Places one 1×1 block (joining a matching neighbour into a wide block when it can). */
+  /** Places one 1×1 block (joining matching neighbours into one building when it touches them). */
   placeNode: (
     kind: NodeKind,
     at: Pt,
@@ -192,7 +192,7 @@ export const useFactory = create<FactoryState>()((set, get) => {
 
     placeNode: (kind, at, rotation, blueprint, template, opts = {}) => {
       const { pipeline } = get();
-      if (!ops.canPlaceNode(pipeline, at.x, at.y, rotation)) return null;
+      if (!ops.canPlaceNode(pipeline, at.x, at.y)) return null;
       const base = { ...makeNode(kind, at.x, at.y, blueprint, rotation), ...(template ?? {}) };
       let id: string | null = null;
       get().edit(
@@ -204,7 +204,7 @@ export const useFactory = create<FactoryState>()((set, get) => {
             x: at.x,
             y: at.y,
             rotation,
-            size: 1,
+            cells: [[0, 0]],
             // Only used when the block doesn't join a neighbour.
             name: ops.copyName(p, base.name),
             inputs: [...base.inputs],

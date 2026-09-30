@@ -28,53 +28,190 @@ export interface Rect {
 
 export const cellKey = (x: number, y: number) => `${x},${y}`;
 
-/** Unit step along a building's row of blocks (across the flow direction). */
-export function lineAxis(rotation: Dir): readonly [number, number] {
-  return rotation % 2 === 0 ? [0, 1] : [1, 0];
-}
-
-/** Footprint in cells: `size` blocks in a row across the flow. */
-export function footprint(rotation: Dir, size = 1): { w: number; h: number } {
-  return rotation % 2 === 0 ? { w: 1, h: size } : { w: size, h: 1 };
-}
-
-type Placed = Pick<FactoryNode, 'x' | 'y' | 'rotation' | 'size'>;
-
-export function nodeRect(node: Placed): Rect {
-  const f = footprint(node.rotation, node.size);
-  return { x: node.x * CELL, y: node.y * CELL, w: f.w * CELL, h: f.h * CELL };
-}
+type Placed = Pick<FactoryNode, 'x' | 'y' | 'cells'>;
+type Oriented = Placed & Pick<FactoryNode, 'rotation'>;
+export type Offsets = Array<[number, number]>;
 
 export function nodeCells(node: Placed): Pt[] {
-  const f = footprint(node.rotation, node.size);
-  const cells: Pt[] = [];
-  for (let dy = 0; dy < f.h; dy++) for (let dx = 0; dx < f.w; dx++) cells.push({ x: node.x + dx, y: node.y + dy });
-  return cells;
+  return node.cells.map(([dx, dy]) => ({ x: node.x + dx, y: node.y + dy }));
 }
 
-/** The cells just outside the face of a building that points in `side`. */
+/** Bounding box of a building, in world pixels. */
+export function nodeRect(node: Placed): Rect {
+  let w = 1;
+  let h = 1;
+  for (const [dx, dy] of node.cells) {
+    w = Math.max(w, dx + 1);
+    h = Math.max(h, dy + 1);
+  }
+  return { x: node.x * CELL, y: node.y * CELL, w: w * CELL, h: h * CELL };
+}
+
+/** Cells just outside every exposed face of a building that points in `side`. */
 export function faceCells(node: Placed, side: Dir): Pt[] {
-  const f = footprint(node.rotation, node.size);
-  const cells: Pt[] = [];
-  if (side === 0) for (let i = 0; i < f.h; i++) cells.push({ x: node.x + f.w, y: node.y + i });
-  if (side === 2) for (let i = 0; i < f.h; i++) cells.push({ x: node.x - 1, y: node.y + i });
-  if (side === 1) for (let i = 0; i < f.w; i++) cells.push({ x: node.x + i, y: node.y + f.h });
-  if (side === 3) for (let i = 0; i < f.w; i++) cells.push({ x: node.x + i, y: node.y - 1 });
-  return cells;
+  const own = new Set(node.cells.map(([dx, dy]) => cellKey(node.x + dx, node.y + dy)));
+  const [sx, sy] = DV[side];
+  const out: Pt[] = [];
+  for (const c of nodeCells(node)) {
+    const n = { x: c.x + sx, y: c.y + sy };
+    if (!own.has(cellKey(n.x, n.y))) out.push(n);
+  }
+  return out;
 }
 
-/** Cells where belts pick items up from a building. */
-export const outputCells = (node: Placed) => faceCells(node, node.rotation);
-/** Cells from which belts deliver items into a building. */
-export const inputCells = (node: Placed) => faceCells(node, opposite(node.rotation));
+/** Cells where belts pick items up from a building: one per exposed front face. */
+export const outputCells = (node: Oriented) => faceCells(node, node.rotation);
+/** Cells from which belts deliver items into a building: one per exposed back face. */
+export const inputCells = (node: Oriented) => faceCells(node, opposite(node.rotation));
+
+/** Shifts offsets so the smallest x and y are 0; returns the shift applied. */
+export function normalizeOffsets(cells: Offsets): { cells: Offsets; dx: number; dy: number } {
+  const dx = Math.min(...cells.map((c) => c[0]));
+  const dy = Math.min(...cells.map((c) => c[1]));
+  const seen = new Set<string>();
+  const out: Offsets = [];
+  for (const [x, y] of cells) {
+    const k = cellKey(x - dx, y - dy);
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push([x - dx, y - dy]);
+    }
+  }
+  out.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  return { cells: out, dx, dy };
+}
+
+/** Offsets turned a quarter turn clockwise per step (screen coordinates), normalised. */
+export function rotateOffsets(cells: Offsets, steps: number): Offsets {
+  let out = cells;
+  const n = ((steps % 4) + 4) % 4;
+  for (let i = 0; i < n; i++) out = out.map(([x, y]) => [-y, x] as [number, number]);
+  return normalizeOffsets(out).cells;
+}
+
+/** Splits cells into 4-connected groups, largest-first order preserved by discovery. */
+export function connectedGroups(cells: Pt[]): Pt[][] {
+  const left = new Map(cells.map((c) => [cellKey(c.x, c.y), c]));
+  const groups: Pt[][] = [];
+  for (const c of cells) {
+    if (!left.has(cellKey(c.x, c.y))) continue;
+    const group: Pt[] = [];
+    const stack = [c];
+    left.delete(cellKey(c.x, c.y));
+    while (stack.length) {
+      const cur = stack.pop()!;
+      group.push(cur);
+      for (const [dx, dy] of DV) {
+        const k = cellKey(cur.x + dx, cur.y + dy);
+        const n = left.get(k);
+        if (n) {
+          left.delete(k);
+          stack.push(n);
+        }
+      }
+    }
+    groups.push(group);
+  }
+  return groups;
+}
+
+/**
+ * Outline of a set of cells as one SVG path with rounded corners, pulled in by
+ * `inset` pixels (negative grows it). Holes come out as separate loops, so
+ * fill with `evenodd`. Works for any shape made of whole cells.
+ */
+export function outlinePath(cells: Pt[], inset: number, radius: number): string {
+  const own = new Set(cells.map((c) => cellKey(c.x, c.y)));
+  const has = (x: number, y: number) => own.has(cellKey(x, y));
+  // Directed boundary edges with the shape on their right-hand side (y points down).
+  const next = new Map<string, Array<[number, number]>>();
+  const add = (ax: number, ay: number, bx: number, by: number) => {
+    const k = cellKey(ax, ay);
+    if (!next.has(k)) next.set(k, []);
+    next.get(k)!.push([bx, by]);
+  };
+  for (const { x, y } of cells) {
+    if (!has(x, y - 1)) add(x, y, x + 1, y);
+    if (!has(x + 1, y)) add(x + 1, y, x + 1, y + 1);
+    if (!has(x, y + 1)) add(x + 1, y + 1, x, y + 1);
+    if (!has(x - 1, y)) add(x, y + 1, x, y);
+  }
+  let d = '';
+  for (const [startKey, outs] of next) {
+    while (outs.length) {
+      // Walk one loop, merging straight runs into single segments.
+      const [sx, sy] = startKey.split(',').map(Number);
+      const loop: Pt[] = [{ x: sx, y: sy }];
+      let cur = { x: sx, y: sy };
+      let prevDir: [number, number] | null = null;
+      for (let guard = 0; guard < 100000; guard++) {
+        const list = next.get(cellKey(cur.x, cur.y));
+        if (!list || !list.length) break;
+        // Where two loops touch at a corner, keep turning right so each loop stays simple.
+        let pick = 0;
+        if (list.length > 1 && prevDir) {
+          const right: [number, number] = [-prevDir[1], prevDir[0]];
+          const i = list.findIndex(([bx, by]) => bx - cur.x === right[0] && by - cur.y === right[1]);
+          if (i >= 0) pick = i;
+        }
+        const [bx, by] = list.splice(pick, 1)[0];
+        const dir: [number, number] = [bx - cur.x, by - cur.y];
+        if (prevDir && prevDir[0] === dir[0] && prevDir[1] === dir[1]) loop[loop.length - 1] = { x: bx, y: by };
+        else loop.push({ x: bx, y: by });
+        prevDir = dir;
+        cur = { x: bx, y: by };
+        if (bx === sx && by === sy) break;
+      }
+      loop.pop(); // last point repeats the start
+      // The start may sit in the middle of a straight run.
+      if (loop.length > 2) {
+        const a = loop[loop.length - 1];
+        const b = loop[0];
+        const c = loop[1];
+        if ((a.x === b.x && b.x === c.x) || (a.y === b.y && b.y === c.y)) loop.shift();
+      }
+      if (loop.length < 3) continue;
+      // Offset each corner inwards along both adjoining edges' inner normals.
+      const pts = loop.map((p, i) => {
+        const a = loop[(i - 1 + loop.length) % loop.length];
+        const b = loop[(i + 1) % loop.length];
+        const din = [Math.sign(p.x - a.x), Math.sign(p.y - a.y)];
+        const dout = [Math.sign(b.x - p.x), Math.sign(b.y - p.y)];
+        const nx = -din[1] - dout[1];
+        const ny = din[0] + dout[0];
+        return { x: p.x * CELL + nx * inset, y: p.y * CELL + ny * inset };
+      });
+      d += closedRoundedPath(pts, radius);
+    }
+  }
+  return d;
+}
+
+function closedRoundedPath(pts: Pt[], radius: number): string {
+  const n = pts.length;
+  const corner = (i: number) => {
+    const p = pts[i];
+    const a = pts[(i - 1 + n) % n];
+    const b = pts[(i + 1) % n];
+    const lin = Math.hypot(p.x - a.x, p.y - a.y);
+    const lout = Math.hypot(b.x - p.x, b.y - p.y);
+    const r = Math.max(0, Math.min(radius, lin / 2, lout / 2));
+    return {
+      a: { x: p.x - ((p.x - a.x) / lin) * r, y: p.y - ((p.y - a.y) / lin) * r },
+      p,
+      b: { x: p.x + ((b.x - p.x) / lout) * r, y: p.y + ((b.y - p.y) / lout) * r },
+    };
+  };
+  const f = (v: number) => Math.round(v * 100) / 100;
+  let d = '';
+  for (let i = 0; i < n; i++) {
+    const c = corner(i);
+    d += `${i === 0 ? 'M' : 'L'} ${f(c.a.x)} ${f(c.a.y)} Q ${f(c.p.x)} ${f(c.p.y)} ${f(c.b.x)} ${f(c.b.y)} `;
+  }
+  return `${d}Z `;
+}
 
 export const cellCenter = (x: number, y: number): Pt => ({ x: (x + 0.5) * CELL, y: (y + 0.5) * CELL });
-
-/** Top-left cell for a building row of `size` centred on `cell`. */
-export function anchorFor(rotation: Dir, size: number, cell: Pt): Pt {
-  const f = footprint(rotation, size);
-  return { x: cell.x - Math.floor(f.w / 2), y: cell.y - Math.floor(f.h / 2) };
-}
 
 /**
  * Cells from `a` to `b` in an L shape (along `firstAxis` first), each with

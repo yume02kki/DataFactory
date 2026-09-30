@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blankPipeline, examplePipeline, makeItem, makeNode } from './defaults';
-import { footprint, lPath, nodeCells, outputCells } from './geometry';
+import { inputCells, lPath, nodeCells, outlinePath, outputCells } from './geometry';
 import * as ops from './ops';
 import { normalizePipeline } from './storage';
 import type { Dir } from './types';
@@ -112,10 +112,10 @@ describe('tracing belt lines', () => {
 describe('editing the floor', () => {
   it('only places blocks on free cells', () => {
     const { p } = tinyFactory();
-    expect(ops.canPlaceNode(p, 0, 0, 0)).toBe(false);
-    expect(ops.canPlaceNode(p, 0, 4, 0)).toBe(true);
+    expect(ops.canPlaceNode(p, 0, 0)).toBe(false);
+    expect(ops.canPlaceNode(p, 0, 4)).toBe(true);
     ops.paintBelt(p, [{ x: 0, y: 4, dir: 0 }]);
-    expect(ops.canPlaceNode(p, 0, 4, 0)).toBe(false);
+    expect(ops.canPlaceNode(p, 0, 4)).toBe(false);
   });
 
   it('right-click erase removes tiles and blocks', () => {
@@ -127,23 +127,26 @@ describe('editing the floor', () => {
     expect(ops.eraseCell(p, 40, 40)).toBeNull();
   });
 
-  it('rotates a wide block around its centre and swaps its footprint', () => {
+  it('rotates a shaped building around its centre, turning its shape', () => {
     const p = blankPipeline();
-    const wide = { ...makeNode('buffer', 0, 0), size: 3 }; // cells (0,0) (0,1) (0,2)
-    p.nodes.push(wide);
-    expect(ops.rotateNodes(p, [wide.id], 1)).toBe(1);
-    expect(wide.rotation).toBe(1);
-    expect(footprint(wide.rotation, wide.size)).toEqual({ w: 3, h: 1 });
-    expect(nodeCells(wide)).toContainEqual({ x: 0, y: 1 }); // the old centre cell stays covered
+    const row = { ...makeNode('buffer', 0, 0), cells: [[0, 0], [0, 1], [0, 2]] as Array<[number, number]> };
+    p.nodes.push(row);
+    expect(ops.rotateNodes(p, [row.id], 1)).toBe(1);
+    expect(row.rotation).toBe(1);
+    expect(nodeCells(row)).toEqual([
+      { x: -1, y: 1 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+    ]);
   });
 
   it('refuses to rotate into something else', () => {
     const p = blankPipeline();
-    const wide = { ...makeNode('buffer', 1, 0), size: 3 };
-    p.nodes.push(wide);
+    const row = { ...makeNode('buffer', 1, 0), cells: [[0, 0], [0, 1], [0, 2]] as Array<[number, number]> };
+    p.nodes.push(row);
     ops.paintBelt(p, [{ x: 0, y: 1, dir: 0 }]);
-    expect(ops.rotateNodes(p, [wide.id], 1)).toBe(0);
-    expect(wide.rotation).toBe(0);
+    expect(ops.rotateNodes(p, [row.id], 1)).toBe(0);
+    expect(row.rotation).toBe(0);
   });
 
   it('moves a selection only onto free cells', () => {
@@ -176,53 +179,81 @@ describe('editing the floor', () => {
   });
 });
 
-describe('wide blocks', () => {
+describe('shaped buildings', () => {
   const block = (x: number, y: number, rotation: Dir = 0, kind: 'machine' | 'store' = 'machine') => ({ ...makeNode(kind, x, y), rotation });
+  const cellsOf = (p: ReturnType<typeof blankPipeline>, id: string | null) =>
+    nodeCells(p.nodes.find((n) => n.id === id)!).map((c) => `${c.x},${c.y}`).sort();
 
-  it('joins blocks placed side by side across the flow', () => {
+  it('joins matching blocks on any side into one building of any shape', () => {
     const p = blankPipeline();
     const a = ops.placeBlock(p, block(0, 0));
-    expect(ops.placeBlock(p, block(0, 1))).toBe(a);
-    expect(ops.placeBlock(p, block(0, -1))).toBe(a);
+    expect(ops.placeBlock(p, block(1, 0))).toBe(a); // in front
+    expect(ops.placeBlock(p, block(1, 1))).toBe(a); // below that: an L
+    expect(ops.placeBlock(p, block(0, 1))).toBe(a); // fills the 2×2
     expect(p.nodes).toHaveLength(1);
-    expect(p.nodes[0]).toMatchObject({ x: 0, y: -1, size: 3 });
-    expect(outputCells(p.nodes[0])).toHaveLength(3); // one port per block
+    expect(cellsOf(p, a)).toEqual(['0,0', '0,1', '1,0', '1,1']);
+    // A 2×2 facing right has two exposed faces on each side.
+    expect(outputCells(p.nodes[0]).map((c) => `${c.x},${c.y}`)).toEqual(['2,0', '2,1']);
+    expect(inputCells(p.nodes[0]).map((c) => `${c.x},${c.y}`)).toEqual(['-1,0', '-1,1']);
   });
 
-  it('keeps blocks separate along the flow, across kinds, types and facings', () => {
+  it('gives an L-shape a port on every exposed front and back face', () => {
+    const p = blankPipeline();
+    for (const [x, y] of [[0, 0], [0, 1], [0, 2], [1, 2]]) ops.placeBlock(p, block(x, y));
+    const n = p.nodes[0];
+    expect(outputCells(n).map((c) => `${c.x},${c.y}`)).toEqual(['1,0', '1,1', '2,2']);
+    expect(inputCells(n)).toHaveLength(3);
+  });
+
+  it('keeps different kinds, types and facings apart', () => {
     const p = blankPipeline();
     ops.placeBlock(p, block(0, 0));
-    ops.placeBlock(p, block(1, 0)); // in front: separate
-    ops.placeBlock(p, block(0, 1, 0, 'store')); // other kind
-    ops.placeBlock(p, block(0, -1, 2)); // other facing
-    ops.placeBlock(p, { ...block(0, 2), type: 'Validator' }); // not adjacent to a machine row end
-    expect(p.nodes).toHaveLength(5);
+    ops.placeBlock(p, block(0, 1, 0, 'store'));
+    ops.placeBlock(p, block(1, 0, 2));
+    ops.placeBlock(p, { ...block(-1, 0), type: 'Validator' });
+    expect(p.nodes).toHaveLength(4);
   });
 
-  it('bridges two rows into one', () => {
+  it('fuses every matching building a new block touches', () => {
     const p = blankPipeline();
-    const a = ops.placeBlock(p, block(3, 0, 1));
-    ops.placeBlock(p, { ...block(5, 0, 1), outputs: ['x'] });
-    expect(p.nodes).toHaveLength(2);
-    expect(ops.placeBlock(p, block(4, 0, 1))).toBe(a);
+    const a = ops.placeBlock(p, block(0, 0));
+    ops.placeBlock(p, { ...block(2, 0), outputs: ['x'] });
+    ops.placeBlock(p, block(1, 1));
+    expect(p.nodes).toHaveLength(3);
+    expect(ops.placeBlock(p, block(1, 0))).toBe(a);
     expect(p.nodes).toHaveLength(1);
-    expect(p.nodes[0]).toMatchObject({ x: 3, size: 3, outputs: ['x'] });
+    expect(cellsOf(p, a)).toEqual(['0,0', '1,0', '1,1', '2,0']);
+    expect(p.nodes[0].outputs).toEqual(['x']);
   });
 
-  it('erasing the middle block splits the row', () => {
+  it('erasing a block that holds the shape together splits it', () => {
     const p = blankPipeline();
-    const wide = { ...makeNode('machine', 0, 0), size: 4, name: 'Validator' };
-    p.nodes.push(wide);
-    ops.eraseCell(p, 0, 1);
-    expect(p.nodes.map((n) => [n.y, n.size, n.name])).toEqual([
-      [0, 1, 'Validator'],
-      [2, 2, 'Validator 2'],
+    for (const [x, y] of [[0, 0], [1, 0], [2, 0], [1, 1]]) ops.placeBlock(p, block(x, y)); // a T
+    p.nodes[0].name = 'Validator';
+    ops.eraseCell(p, 1, 0);
+    expect(p.nodes.map((n) => [n.name, nodeCells(n).length])).toEqual([
+      ['Validator', 1],
+      ['Validator 2', 1],
+      ['Validator 3', 1],
     ]);
-    ops.eraseCell(p, 0, 2);
-    expect(p.nodes[1]).toMatchObject({ y: 3, size: 1 });
   });
 
-  it('blocks touching front-to-back hand items over directly', () => {
+  it('erasing an edge block just shrinks the shape', () => {
+    const p = blankPipeline();
+    for (const [x, y] of [[0, 0], [1, 0], [1, 1]]) ops.placeBlock(p, block(x, y));
+    ops.eraseCell(p, 0, 0);
+    expect(p.nodes).toHaveLength(1);
+    expect(nodeCells(p.nodes[0]).map((c) => `${c.x},${c.y}`)).toEqual(['1,0', '1,1']);
+  });
+
+  it('outlines a shape with a hole as two loops', () => {
+    const ring = [];
+    for (let x = 0; x < 3; x++) for (let y = 0; y < 3; y++) if (x !== 1 || y !== 1) ring.push({ x, y });
+    expect(outlinePath(ring, 2, 4).match(/M/g)).toHaveLength(2);
+    expect(outlinePath([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }], 2, 4).match(/M/g)).toHaveLength(1);
+  });
+
+  it('blocks of different types touching front-to-back hand items over directly', () => {
     const { p, src, mac, visit } = tinyFactory();
     src.x = 3; // right behind the machine
     const [link] = ops.traceLinks(p);
@@ -253,6 +284,15 @@ describe('the example and files', () => {
     expect(normalizePipeline(JSON.parse(JSON.stringify(p)))).toEqual(p);
   });
 
+  it('reads the older row size as a straight shape', () => {
+    const p = normalizePipeline({ nodes: [{ id: 'a', kind: 'machine', x: 2, y: 3, rotation: 1, size: 3 }] });
+    expect(p.nodes[0].cells).toEqual([
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ]);
+  });
+
   it('migrates old from → to belts into laid tiles', () => {
     const p = normalizePipeline({
       items: [{ id: 'i1', name: 'Order', shape: 'circle' }],
@@ -280,7 +320,7 @@ describe('the example and files', () => {
     });
     expect(p.items[0].shape).toBe('circle');
     expect(p.nodes).toHaveLength(1);
-    expect(p.nodes[0]).toMatchObject({ x: 1, rotation: 0, size: 1, outputs: ['i1'], inputs: [] });
+    expect(p.nodes[0]).toMatchObject({ x: 1, rotation: 0, cells: [[0, 0]], outputs: ['i1'], inputs: [] });
     expect(p.belts).toHaveLength(1);
     expect(p.belts[0].dir).toBe(0);
   });

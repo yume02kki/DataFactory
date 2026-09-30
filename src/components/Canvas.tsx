@@ -6,7 +6,8 @@ import type { Dir, NodeKind } from '../model/types';
 import { useFactory } from '../store/useFactory';
 import { CANVAS_ID, pointer, zoomAt } from '../lib/viewport';
 import { BeltTiles, LinkItems } from './BeltView';
-import { NodeView, RotatedArt } from './NodeView';
+import { NodeView } from './NodeView';
+import { BuildingArt } from './BuildingArt';
 
 export const DND_MIME = 'application/x-datafactory';
 
@@ -390,7 +391,7 @@ export function Canvas() {
     const at = hover;
     const blueprint = tool.blueprintId ? pipeline.blueprints.find((b) => b.id === tool.blueprintId) : undefined;
     const color = tool.template?.color ?? blueprint?.color ?? KIND_META[tool.kind].color;
-    const valid = ops.canPlaceNode(pipeline, at.x, at.y, rotation);
+    const valid = ops.canPlaceNode(pipeline, at.x, at.y);
     return { building: { kind: tool.kind as NodeKind, at, color, valid } };
   }, [hover, tool, rotation, pipeline, paintPreview]);
 
@@ -461,7 +462,7 @@ export function Canvas() {
           {previewTiles && <BeltTiles tiles={previewTiles.tiles} inflow={previewTiles.inflow} className="belt-ghost" />}
           {ghost?.building && (
             <g className={`ghost-building${ghost.building.valid ? '' : ' invalid'}`}>
-              <RotatedArt kind={ghost.building.kind} rotation={rotation} size={1} color={ghost.building.color} x={ghost.building.at.x * CELL} y={ghost.building.at.y * CELL} />
+              <BuildingArt kind={ghost.building.kind} cells={[ghost.building.at]} rotation={rotation} color={ghost.building.color} />
               {!ghost.building.valid && (
                 <rect
                   className="ghost-block"

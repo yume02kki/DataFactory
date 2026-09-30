@@ -5,7 +5,7 @@ const CONTROLS: Array<[string, string]> = [
   ['1', 'Belt tool: left-drag to lay a conveyor'],
   ['2 · 3 · 4 · 5', 'Source / machine / buffer / store tool'],
   ['Palette tile', 'Build that component type'],
-  ['Left click · drag', 'Build with the active tool; drag a row of blocks to make a wide block'],
+  ['Left click · drag', 'Build with the active tool; drag to paint blocks into any shape'],
   ['Right click · drag', 'Destroy what is under the cursor'],
   ['Right click on floor · Esc', 'Put the tool away'],
   ['R · Shift R', 'Rotate the tool, the selected buildings, or the belt under the cursor'],
@@ -45,8 +45,8 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </div>
         <p className="muted small">
           Items enter a building on the side with inward arrows and leave on the side with outward arrows. Lay belts from one building's
-          output side into the next building's input side. Blocks of the same type placed side by side become one wide block
-          with a port per block. Every building is generic: its <b>type</b> says what role it plays and its{' '}
+          output side into the next building's input side. Matching blocks that touch join into one building of any shape, with a port on
+          every exposed face. Every building is generic: its <b>type</b> says what role it plays and its{' '}
           <b>technology</b> is free text.
         </p>
         <table className="controls">

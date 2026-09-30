@@ -155,7 +155,16 @@
         "x": 0,
         "y": 0,
         "rotation": 0,
-        "size": 2,
+        "cells": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
         "inputs": [],
         "outputs": [
           "item_file",
@@ -174,7 +183,12 @@
         "x": 4,
         "y": 0,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_file"
         ],
@@ -192,7 +206,12 @@
         "x": 4,
         "y": 6,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_item"
         ],
@@ -212,7 +231,16 @@
         "x": 8,
         "y": 6,
         "rotation": 0,
-        "size": 2,
+        "cells": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
         "inputs": [
           "item_cold",
           "item_item"
@@ -234,7 +262,16 @@
         "x": 12,
         "y": 12,
         "rotation": 0,
-        "size": 2,
+        "cells": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
         "inputs": [
           "item_lookup"
         ],
@@ -255,7 +292,12 @@
         "x": 16,
         "y": 12,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_history"
         ],
@@ -273,7 +315,16 @@
         "x": 12,
         "y": 6,
         "rotation": 0,
-        "size": 2,
+        "cells": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
         "inputs": [
           "item_full"
         ],
@@ -293,7 +344,12 @@
         "x": 16,
         "y": 0,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_full"
         ],
@@ -313,7 +369,12 @@
         "x": 16,
         "y": 6,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_full"
         ],
@@ -333,7 +394,12 @@
         "x": 20,
         "y": 0,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_lids"
         ],
@@ -353,7 +419,12 @@
         "x": 20,
         "y": 6,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_boom"
         ],
@@ -373,7 +444,16 @@
         "x": 24,
         "y": 6,
         "rotation": 0,
-        "size": 2,
+        "cells": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
         "inputs": [
           "item_boom"
         ],
@@ -394,7 +474,16 @@
         "x": 64,
         "y": 12,
         "rotation": 0,
-        "size": 2,
+        "cells": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
         "inputs": [
           "item_indexed",
           "item_updated"
@@ -413,7 +502,20 @@
         "x": 28,
         "y": 6,
         "rotation": 0,
-        "size": 3,
+        "cells": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ]
+        ],
         "inputs": [
           "item_enrich"
         ],
@@ -433,7 +535,16 @@
         "x": 32,
         "y": 0,
         "rotation": 0,
-        "size": 2,
+        "cells": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
         "inputs": [
           "item_enrich",
           "item_sttlang"
@@ -454,7 +565,12 @@
         "x": 32,
         "y": 12,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_enrich"
         ],
@@ -474,7 +590,12 @@
         "x": 36,
         "y": 0,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_sttenr"
         ],
@@ -494,7 +615,12 @@
         "x": 40,
         "y": 0,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_sttenr"
         ],
@@ -514,7 +640,12 @@
         "x": 44,
         "y": 0,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_sttreq"
         ],
@@ -534,7 +665,16 @@
         "x": 48,
         "y": 0,
         "rotation": 0,
-        "size": 2,
+        "cells": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
         "inputs": [
           "item_sttres"
         ],
@@ -554,7 +694,12 @@
         "x": 36,
         "y": 12,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_enres"
         ],
@@ -574,7 +719,12 @@
         "x": 52,
         "y": 0,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_sttres"
         ],
@@ -592,7 +742,20 @@
         "x": 52,
         "y": 6,
         "rotation": 0,
-        "size": 3,
+        "cells": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ]
+        ],
         "inputs": [
           "item_enres",
           "item_enrich",
@@ -614,7 +777,12 @@
         "x": 56,
         "y": 6,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_joined"
         ],
@@ -634,7 +802,12 @@
         "x": 60,
         "y": 6,
         "rotation": 0,
-        "size": 1,
+        "cells": [
+          [
+            0,
+            0
+          ]
+        ],
         "inputs": [
           "item_joined"
         ],
@@ -2699,7 +2872,7 @@
       "y": 0,
       "zoom": 1
     },
-    "createdAt": 1790766230666,
-    "updatedAt": 1790766230666
+    "createdAt": 1790767400865,
+    "updatedAt": 1790767400865
   }
 }
