@@ -28,7 +28,8 @@ function collectCss(): string {
   let css = '';
   for (const sheet of Array.from(document.styleSheets)) {
     try {
-      for (const rule of Array.from(sheet.cssRules)) css += `${rule.cssText}\n`;
+      // Screen-size rules only lay out the panels, which aren't in the image.
+      for (const rule of Array.from(sheet.cssRules)) if (!(rule instanceof CSSMediaRule)) css += `${rule.cssText}\n`;
     } catch {
       // Cross-origin stylesheets can't be read; the app's own styles always can.
     }
@@ -99,7 +100,7 @@ function buildSvg(clone: SVGGElement, region: Rect, css: string, withGrid: boole
        <rect x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" fill="url(#xgrid)"/>`
     : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${region.w}" height="${region.h}" viewBox="${region.x} ${region.y} ${region.w} ${region.h}">
-<style>${css}</style>
+<style><![CDATA[${css.replaceAll(']]>', ']]]]><![CDATA[>')}]]></style>
 <rect x="${region.x}" y="${region.y}" width="${region.w}" height="${region.h}" fill="${floor}"/>
 ${grid}
 <g class="canvas-wrap flowing">${new XMLSerializer().serializeToString(clone)}</g>
