@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ARROW_COLOR, KIND_META } from '../model/defaults';
+import { ARROW_COLOR, KIND_META, SWATCHES } from '../model/defaults';
 import { CELL, cellKey, nodeCells, nodeRect, normalizeRect, rectsIntersect, type Pt, type Rect } from '../model/geometry';
 import * as ops from '../model/ops';
 import type { Dir, NodeKind, Pipeline } from '../model/types';
@@ -10,6 +10,8 @@ import { BeltTiles, LinkItems } from './BeltView';
 import { NodeView } from './NodeView';
 import { BuildingArt } from './BuildingArt';
 import { ArrowPreview, ArrowView } from './ArrowView';
+import { AreaView } from './AreaView';
+import { uid } from '../model/ids';
 
 export const DND_MIME = 'application/x-datafactory';
 
@@ -44,7 +46,10 @@ type Gesture =
     }
   | { type: 'marquee'; start: Pt; baseNodes: string[]; baseTiles: string[] }
   | { type: 'exportArea'; start: Pt }
-  | { type: 'link'; from: string };
+  | { type: 'link'; from: string }
+  | { type: 'areaDraw'; start: Pt }
+  | { type: 'areaMove'; id: string; start: Pt; origin: Pt; nodes: Map<string, Pt>; tiles: Map<string, Pt>; last: Pt; moved: boolean }
+  | { type: 'areaResize'; id: string; start: Pt; w0: number; h0: number };
 
 interface LinkPreview {
   from: string;
@@ -85,6 +90,7 @@ export function Canvas() {
   const [hover, setHover] = useState<Pt | null>(null);
   const [marquee, setMarquee] = useState<Rect | null>(null);
   const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
+  const [areaPreview, setAreaPreview] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [panning, setPanning] = useState(false);
 
   const toWorld = useCallback((clientX: number, clientY: number): Pt => {
@@ -185,6 +191,27 @@ export function Canvas() {
       return;
     }
 
+    // Areas: the name tag moves (with everything inside) or deletes on right-click; the handle resizes.
+    const areaEl = (e.target as Element).closest('[data-area-part]');
+    const areaId = areaEl?.getAttribute('data-area-id');
+    const area = areaId ? state.pipeline.areas.find((a) => a.id === areaId) : undefined;
+    if (area && e.button === 2 && areaEl?.getAttribute('data-area-part') === 'label') {
+      state.edit((p) => void (p.areas = p.areas.filter((a) => a.id !== area.id)));
+      return;
+    }
+    if (area && e.button === 0 && (!tool || tool.type === 'area')) {
+      state.select({ area: area.id });
+      if (areaEl?.getAttribute('data-area-part') === 'handle') {
+        gesture.current = { type: 'areaResize', id: area.id, start: cell, w0: area.w, h0: area.h };
+      } else {
+        const inside = ops.areaContents(state.pipeline, area);
+        const nodes = new Map(state.pipeline.nodes.filter((n) => inside.nodes.includes(n.id)).map((n) => [n.id, { x: n.x, y: n.y }]));
+        const tiles = new Map(state.pipeline.belts.filter((t) => inside.tiles.includes(t.id)).map((t) => [t.id, { x: t.x, y: t.y }]));
+        gesture.current = { type: 'areaMove', id: area.id, start: cell, origin: { x: area.x, y: area.y }, nodes, tiles, last: { x: 0, y: 0 }, moved: false };
+      }
+      return;
+    }
+
     // Arrows float above the floor: right-click deletes one, left-click selects it (unless building).
     const arrowId = (e.target as Element).closest('[data-arrow-id]')?.getAttribute('data-arrow-id');
     if (arrowId && e.button === 2) {
@@ -204,6 +231,12 @@ export function Canvas() {
       return;
     }
     if (e.button !== 0) return;
+
+    if (tool?.type === 'area') {
+      gesture.current = { type: 'areaDraw', start: cell };
+      setAreaPreview({ x: cell.x, y: cell.y, w: 1, h: 1 });
+      return;
+    }
 
     if (tool?.type === 'paste') {
       const clip = state.clipboard;
@@ -358,6 +391,55 @@ export function Canvas() {
       return;
     }
 
+    if (g.type === 'areaDraw') {
+      setAreaPreview({ x: Math.min(g.start.x, cell.x), y: Math.min(g.start.y, cell.y), w: Math.abs(cell.x - g.start.x) + 1, h: Math.abs(cell.y - g.start.y) + 1 });
+      return;
+    }
+
+    if (g.type === 'areaResize') {
+      const w = Math.max(1, g.w0 + cell.x - g.start.x);
+      const h = Math.max(1, g.h0 + cell.y - g.start.y);
+      const cur = state.pipeline.areas.find((a) => a.id === g.id);
+      if (!cur || (cur.w === w && cur.h === h)) return;
+      state.edit(
+        (p) => {
+          const a = p.areas.find((x) => x.id === g.id);
+          if (a) Object.assign(a, { w, h });
+        },
+        { coalesce: `resize:${g.id}` },
+      );
+      return;
+    }
+
+    if (g.type === 'areaMove') {
+      const dx = cell.x - g.start.x;
+      const dy = cell.y - g.start.y;
+      if (dx === g.last.x && dy === g.last.y) return;
+      // Everything inside comes along; if it can't fit, the area waits.
+      if (!ops.canMove(state.pipeline, [...g.nodes.keys()], [...g.tiles.keys()], dx - g.last.x, dy - g.last.y)) return;
+      if (!g.moved) {
+        g.moved = true;
+        state.checkpoint();
+      }
+      g.last = { x: dx, y: dy };
+      state.edit(
+        (p) => {
+          const a = p.areas.find((x) => x.id === g.id);
+          if (a) Object.assign(a, { x: g.origin.x + dx, y: g.origin.y + dy });
+          for (const n of p.nodes) {
+            const o = g.nodes.get(n.id);
+            if (o) Object.assign(n, { x: o.x + dx, y: o.y + dy });
+          }
+          for (const t of p.belts) {
+            const o = g.tiles.get(t.id);
+            if (o) Object.assign(t, { x: o.x + dx, y: o.y + dy });
+          }
+        },
+        { history: false },
+      );
+      return;
+    }
+
     if (g.type === 'link') {
       const target = occupancy.get(cellKey(cell.x, cell.y))?.node;
       setLinkPreview({ from: g.from, to: world, target: target && target.id !== g.from ? target.id : null });
@@ -412,6 +494,25 @@ export function Canvas() {
       state.selectNodes([g.nodeId]);
     } else if (g.type === 'marquee') {
       setMarquee(null);
+    } else if (g.type === 'areaDraw') {
+      setAreaPreview(null);
+      const cell = cellOf(toWorld(e.clientX, e.clientY));
+      const color = SWATCHES[state.pipeline.areas.length % SWATCHES.length];
+      const area = {
+        id: uid('area'),
+        name: `Area ${state.pipeline.areas.length + 1}`,
+        color,
+        x: Math.min(g.start.x, cell.x),
+        y: Math.min(g.start.y, cell.y),
+        w: Math.abs(cell.x - g.start.x) + 1,
+        h: Math.abs(cell.y - g.start.y) + 1,
+      };
+      state.edit((p) => void p.areas.push(area));
+      // Put the tool away and open the new area so it can be named.
+      state.setTool(null);
+      state.select({ area: area.id });
+    } else if (g.type === 'areaMove' && g.moved) {
+      state.edit((p) => void ops.mergeTouching(p), { history: false });
     } else if (g.type === 'link') {
       setLinkPreview(null);
       const cell = cellOf(toWorld(e.clientX, e.clientY));
@@ -580,6 +681,14 @@ export function Canvas() {
         <rect className="grid-bg" width="100%" height="100%" fill="url(#grid)" />
 
         <g transform={`translate(${view.x} ${view.y}) scale(${view.zoom})`}>
+          <g className="layer-areas">
+            {pipeline.areas.map((a) => (
+              <AreaView key={a.id} area={a} selected={selection.area === a.id} />
+            ))}
+            {areaPreview && (
+              <rect className="area-preview" x={areaPreview.x * CELL} y={areaPreview.y * CELL} width={areaPreview.w * CELL} height={areaPreview.h * CELL} rx={14} />
+            )}
+          </g>
           <BeltTiles tiles={pipeline.belts} inflow={inflow} selected={selectedTiles} dimmed={dimmedTiles} />
           <g className="layer-items">
             {links.map((l) => (

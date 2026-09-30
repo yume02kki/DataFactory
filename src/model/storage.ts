@@ -182,6 +182,18 @@ export function normalizePipeline(input: unknown): Pipeline {
     nodes,
     belts: draft.belts,
     arrows: readArrows(raw, new Set(nodes.map((n) => n.id))),
+    areas: arr(raw.areas)
+      .map((v) => obj(v))
+      .filter((o) => Number.isFinite(o.x) && Number.isFinite(o.y))
+      .map((o) => ({
+        id: str(o.id) || uid('area'),
+        name: str(o.name, 'Area'),
+        color: str(o.color, '#66a7ff'),
+        x: Math.round(num(o.x)),
+        y: Math.round(num(o.y)),
+        w: Math.max(1, Math.round(num(o.w, 1))),
+        h: Math.max(1, Math.round(num(o.h, 1))),
+      })),
     view: { x: num(view.x), y: num(view.y), zoom: Math.min(2.5, Math.max(0.2, num(view.zoom, 1))) },
     createdAt: num(raw.createdAt, now),
     updatedAt: num(raw.updatedAt, now),

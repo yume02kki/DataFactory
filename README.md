@@ -125,6 +125,16 @@ many others as you like. Click an arrow to give it a label (e.g. "reads from"),
 change its colour, make it dashed or flip its direction. Right-click an arrow to
 delete it. A building's inspector lists the arrows to and from it.
 
+## Areas
+
+Mark where one pipeline ends and the next begins with a see-through coloured
+**area** behind the buildings. Press `7` (the last hotbar slot) and drag a
+rectangle, or select some buildings and press `Ctrl G` to wrap them. Click the
+name tag to rename the area or change its colour. Drag the name tag to move the
+area together with everything wholly inside it. Drag the corner dot to resize.
+Right-click the name tag (or press `Del` while it's selected) to remove the area;
+the buildings stay where they are.
+
 ## Exporting images
 
 **Export ▾** in the top bar saves the factory as a **PNG** (rendered at 2×) or an

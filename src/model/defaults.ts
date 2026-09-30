@@ -155,6 +155,7 @@ export function blankPipeline(name = 'Untitled factory'): Pipeline {
     nodes: [],
     belts: [],
     arrows: [],
+    areas: [],
     view: { x: 0, y: 0, zoom: 1 },
     createdAt: now,
     updatedAt: now,
@@ -319,5 +320,11 @@ export function examplePipeline(): Pipeline {
   lay(valid.id, [16, 0], [19, 0]);
   lay(invalid.id, [16, 1], [17, 1], [17, 5], [19, 5]);
   lay(summary.id, [21, 0], [24, 0]);
+
+  // Areas mark the two halves of the pipeline.
+  p.areas = [
+    { id: uid('area'), name: 'Ingest & enrich', color: '#66a7ff', x: -2, y: -2, w: 15, h: 5 },
+    { id: uid('area'), name: 'Validate & store', color: '#78ff66', x: 14, y: -2, w: 14, h: 10 },
+  ];
   return p;
 }

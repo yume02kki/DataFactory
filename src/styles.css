@@ -1970,3 +1970,48 @@ select:focus {
     max-width: calc(100vw - 16px);
   }
 }
+
+/* ---------- areas: coloured backgrounds that group part of the factory ---------- */
+.area-fill {
+  fill-opacity: 0.12;
+  stroke-opacity: 0.55;
+  stroke-width: 2;
+  stroke-dasharray: 8 6;
+  pointer-events: none;
+}
+.area.selected .area-fill {
+  fill-opacity: 0.18;
+  stroke-opacity: 0.95;
+  stroke-dasharray: none;
+}
+.area-label {
+  cursor: move;
+}
+.area-label text {
+  fill: #1d1f24;
+}
+.area-handle {
+  cursor: nwse-resize;
+}
+.area-handle circle {
+  stroke: var(--panel-solid);
+  stroke-width: 2.5;
+}
+.area-handle path {
+  stroke: #1d1f24;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  fill: none;
+}
+.area-preview {
+  fill: rgba(102, 167, 255, 0.12);
+  stroke: #66a7ff;
+  stroke-width: 2;
+  stroke-dasharray: 8 6;
+  pointer-events: none;
+}
+.area-icon .li-block {
+  fill: var(--plate);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}

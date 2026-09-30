@@ -5,6 +5,18 @@ import { KindIcon } from './KindIcon';
 
 export const BELT_HOTKEY = '1';
 export const LINK_HOTKEY = '6';
+export const AREA_HOTKEY = '7';
+
+export function AreaIcon({ size = 34, color = '#66a7ff' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden className="area-icon">
+      <rect x="3" y="5" width="26" height="23" rx="5" fill={color} fillOpacity={0.22} stroke={color} strokeWidth={2} strokeDasharray="4 3" />
+      <rect x="5" y="2" width="14" height="7" rx="3.5" fill={color} />
+      <rect x="9" y="14" width="6" height="6" rx="1.5" className="li-block" />
+      <rect x="18" y="14" width="6" height="6" rx="1.5" className="li-block" />
+    </svg>
+  );
+}
 
 export function LinkIcon({ size = 34 }: { size?: number }) {
   return (
@@ -32,6 +44,7 @@ function toolLabel(tool: Tool | null, blueprintName?: string): string {
   if (tool.type === 'belt') return 'Belt';
   if (tool.type === 'link') return 'Link';
   if (tool.type === 'paste') return 'Paste';
+  if (tool.type === 'area') return 'Area';
   return tool.template?.name ?? blueprintName ?? KIND_META[tool.kind].label;
 }
 
@@ -48,12 +61,16 @@ export function Hotbar() {
       {tool && (
         <div className="tool-hint">
           <b>{toolLabel(tool, blueprintName)}</b>
-          {tool.type !== 'link' && tool.type !== 'paste' && (
+          {tool.type !== 'link' && tool.type !== 'paste' && tool.type !== 'area' && (
             <span className="rot" style={{ transform: `rotate(${rotation * 90}deg)` }}>
               ➜
             </span>
           )}
-          {tool.type === 'paste' ? (
+          {tool.type === 'area' ? (
+            <span>
+              Drag a rectangle to mark part of the factory · <kbd>Right</kbd> / <kbd>Esc</kbd> done
+            </span>
+          ) : tool.type === 'paste' ? (
             <span>
               <kbd>Left</kbd> place (again for more) · <kbd>R</kbd> rotate · <kbd>Right</kbd> / <kbd>Esc</kbd> done
             </span>
@@ -94,6 +111,14 @@ export function Hotbar() {
         >
           <LinkIcon />
           <kbd>{LINK_HOTKEY}</kbd>
+        </button>
+        <button
+          className={`hot-slot${tool?.type === 'area' ? ' active' : ''}`}
+          onClick={() => setTool(tool?.type === 'area' ? null : { type: 'area' })}
+          title="Area — drag a coloured background around part of the factory"
+        >
+          <AreaIcon />
+          <kbd>{AREA_HOTKEY}</kbd>
         </button>
       </div>
     </div>

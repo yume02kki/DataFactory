@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { ARROW_COLOR, ITEM_SHAPES, KIND_META, SWATCHES } from '../model/defaults';
 import { uid } from '../model/ids';
 import * as ops from '../model/ops';
-import type { Arrow, CombineMode, FactoryNode, ItemType, Pipeline } from '../model/types';
-import { BeltIcon, LinkIcon } from './Hotbar';
+import type { Area, Arrow, CombineMode, FactoryNode, ItemType, Pipeline } from '../model/types';
+import { AreaIcon, BeltIcon, LinkIcon } from './Hotbar';
 import { IconPicker } from './IconPicker';
 import { ICON_NAMES } from '../lib/icons';
 import { inputCells, outputCells } from '../model/geometry';
@@ -33,6 +33,9 @@ export function Inspector() {
   } else if (selection.arrow) {
     const arrow = pipeline.arrows.find((a) => a.id === selection.arrow);
     if (arrow) body = <ArrowInspector key={arrow.id} arrow={arrow} pipeline={pipeline} />;
+  } else if (selection.area) {
+    const area = pipeline.areas.find((a) => a.id === selection.area);
+    if (area) body = <AreaInspector key={area.id} area={area} pipeline={pipeline} />;
   } else if (selection.item) {
     const item = pipeline.items.find((i) => i.id === selection.item);
     if (item) body = <ItemInspector key={item.id} item={item} pipeline={pipeline} links={links} />;
@@ -395,8 +398,48 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
         <button className="btn" onClick={() => useFactory.getState().duplicateSelection()}>
           Duplicate <kbd>Ctrl D</kbd>
         </button>
+        <button className="btn" onClick={() => useFactory.getState().areaFromSelection()} title="Draw a coloured area around the selection">
+          Mark as area <kbd>Ctrl G</kbd>
+        </button>
         <button className="btn danger" onClick={() => useFactory.getState().deleteSelection()}>
           Delete <kbd>Del</kbd>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- area ---------- */
+
+function AreaInspector({ area, pipeline }: { area: Area; pipeline: Pipeline }) {
+  const set = <K extends keyof Area>(key: K, value: Area[K], coalesce = false) =>
+    edit(
+      (p) => {
+        const a = p.areas.find((x) => x.id === area.id);
+        if (a) a[key] = value;
+      },
+      coalesce ? { coalesce: `${area.id}:${String(key)}` } : {},
+    );
+  const inside = ops.areaContents(pipeline, area);
+  return (
+    <div className="insp-body">
+      <Header icon={<AreaIcon size={34} color={area.color} />} eyebrow="Area" title={area.name || 'Untitled area'} />
+      <Field label="Name">
+        <input value={area.name} placeholder="e.g. Ingest, Serving layer" onChange={(e) => set('name', e.target.value, true)} />
+      </Field>
+      <Field label="Colour">
+        <Swatches value={area.color} onChange={(c) => set('color', c)} />
+      </Field>
+      <p className="muted small">
+        {inside.nodes.length} buildings inside ({area.w}×{area.h} cells). Drag the name tag to move the area together with everything inside it; drag
+        the corner dot to resize. Right-click the name tag to remove the area (the buildings stay).
+      </p>
+      <div className="insp-actions wrap">
+        <button className="btn" disabled={!inside.nodes.length && !inside.tiles.length} onClick={() => useFactory.getState().select({ nodes: inside.nodes, tiles: inside.tiles })}>
+          Select contents
+        </button>
+        <button className="btn danger" onClick={() => useFactory.getState().deleteSelection()}>
+          Remove area <kbd>Del</kbd>
         </button>
       </div>
     </div>

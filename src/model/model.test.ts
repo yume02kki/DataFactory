@@ -556,3 +556,34 @@ describe('copy and paste', () => {
     expect(other.nodes[0].outputs).toEqual([visit.id]);
   });
 });
+
+describe('areas', () => {
+  it('knows what lies wholly inside an area', () => {
+    const { p, src, mac, sto } = tinyFactory();
+    ops.paintBelt(p, row(1, 3, 0));
+    const area = { id: 'a1', name: 'Ingest', color: '#66a7ff', x: -1, y: -1, w: 6, h: 3 };
+    const inside = ops.areaContents(p, area);
+    expect(inside.nodes).toEqual([src.id, mac.id]);
+    expect(inside.nodes).not.toContain(sto.id);
+    expect(inside.tiles).toHaveLength(3);
+  });
+
+  it('draws an area around a selection with a margin', () => {
+    const { p, src, mac } = tinyFactory();
+    const area = ops.areaAround(p, [src.id, mac.id], [], 'Part', '#78ff66')!;
+    expect(area).toMatchObject({ x: -1, y: -1, w: 7, h: 4, name: 'Part', color: '#78ff66' });
+    expect(ops.areaContents(p, area).nodes).toEqual([src.id, mac.id]);
+    expect(ops.areaAround(p, [], [], 'x', '#fff')).toBeNull();
+  });
+
+  it('keeps areas when saved and loaded, and drops broken ones', () => {
+    const p = normalizePipeline({
+      areas: [
+        { id: 'a1', name: 'Serve', color: '#ff0', x: 1, y: 2, w: 3, h: 4 },
+        { id: 'a2', name: 'Bad', x: 'no' },
+      ],
+    });
+    expect(p.areas).toEqual([{ id: 'a1', name: 'Serve', color: '#ff0', x: 1, y: 2, w: 3, h: 4 }]);
+    expect(examplePipeline().areas.length).toBeGreaterThan(0);
+  });
+});

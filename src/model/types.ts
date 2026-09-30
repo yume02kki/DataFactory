@@ -126,6 +126,21 @@ export interface Arrow {
   dashed: boolean;
 }
 
+/**
+ * A coloured, see-through rectangle on the floor with a name, marking a part
+ * of the factory (e.g. where one pipeline starts and another ends). Drawn under
+ * everything else; position and size are in grid cells.
+ */
+export interface Area {
+  id: string;
+  name: string;
+  color: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface Viewport {
   x: number;
   y: number;
@@ -141,6 +156,7 @@ export interface Pipeline {
   nodes: FactoryNode[];
   belts: BeltTile[];
   arrows: Arrow[];
+  areas: Area[];
   view: Viewport;
   createdAt: number;
   updatedAt: number;
@@ -153,6 +169,7 @@ export interface Selection {
   /** A belt tile whose belt line is shown in the inspector. */
   belt: string | null;
   arrow: string | null;
+  area: string | null;
   item: string | null;
 }
 
@@ -160,6 +177,8 @@ export interface Selection {
 export type Tool =
   | { type: 'belt' }
   | { type: 'link' }
+  /** Dragging out a new area. */
+  | { type: 'area' }
   /** Placing the copied selection (the clipboard). */
   | { type: 'paste' }
   | { type: 'building'; kind: NodeKind; blueprintId: string | null; template?: Partial<FactoryNode> };

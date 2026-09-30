@@ -16,7 +16,7 @@ import {
   type Pt,
 } from './geometry';
 import { uid } from './ids';
-import type { Arrow, BeltTile, CombineMode, Dir, FactoryNode, ItemLayer, ItemType, Pipeline } from './types';
+import type { Area, Arrow, BeltTile, CombineMode, Dir, FactoryNode, ItemLayer, ItemType, Pipeline } from './types';
 
 /**
  * Pure (draft-mutating) grid operations shared by the store, canvas and tests.
@@ -710,4 +710,27 @@ export function pasteClip(p: Pipeline, clip: Clip, at: Pt): { nodes: string[]; t
     if (from && to) p.arrows.push({ ...a, id: uid('arrow'), from, to });
   }
   return { nodes, tiles };
+}
+
+/* ---------- areas ---------- */
+
+/** Buildings and belt tiles lying wholly inside an area. */
+export function areaContents(p: Pipeline, area: Area): { nodes: string[]; tiles: string[] } {
+  const inside = (c: Pt) => c.x >= area.x && c.x < area.x + area.w && c.y >= area.y && c.y < area.y + area.h;
+  return {
+    nodes: p.nodes.filter((n) => nodeCells(n).every(inside)).map((n) => n.id),
+    tiles: p.belts.filter((t) => inside(t)).map((t) => t.id),
+  };
+}
+
+/** An area around the given buildings and tiles, with a one-cell margin (null if nothing given). */
+export function areaAround(p: Pipeline, nodeIds: string[], tileIds: string[], name: string, color: string): Area | null {
+  const cells = [...p.nodes.filter((n) => nodeIds.includes(n.id)).flatMap((n) => nodeCells(n)), ...p.belts.filter((t) => tileIds.includes(t.id))];
+  if (!cells.length) return null;
+  const minX = Math.min(...cells.map((c) => c.x)) - 1;
+  const minY = Math.min(...cells.map((c) => c.y)) - 1;
+  const maxX = Math.max(...cells.map((c) => c.x)) + 1;
+  // One more row at the bottom so building names stay inside.
+  const maxY = Math.max(...cells.map((c) => c.y)) + 2;
+  return { id: uid('area'), name, color, x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
 }

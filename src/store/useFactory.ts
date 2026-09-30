@@ -1,6 +1,6 @@
 import { produce } from 'immer';
 import { create } from 'zustand';
-import { KIND_META, makeItem, makeNode } from '../model/defaults';
+import { KIND_META, SWATCHES, makeItem, makeNode } from '../model/defaults';
 import { cellKey, rotateDir, type Pt } from '../model/geometry';
 import { uid } from '../model/ids';
 import * as ops from '../model/ops';
@@ -9,7 +9,7 @@ import type { Blueprint, Dir, FactoryNode, ItemType, NodeKind, Pipeline, Selecti
 const HISTORY_LIMIT = 120;
 const COALESCE_MS = 1200;
 
-const EMPTY_SELECTION: Selection = { nodes: [], tiles: [], belt: null, arrow: null, item: null };
+const EMPTY_SELECTION: Selection = { nodes: [], tiles: [], belt: null, arrow: null, area: null, item: null };
 
 export interface Toast {
   id: number;
@@ -52,6 +52,8 @@ export interface FactoryState {
   /** Copies the selection to the clipboard. Returns false when nothing is selected. */
   copySelection: () => boolean;
   cutSelection: () => void;
+  /** Wraps the selected buildings and belts in a new area (Ctrl G). */
+  areaFromSelection: () => void;
   /** Picks up the clipboard as the paste tool. */
   startPaste: () => void;
   /** Places the clipboard with its top-left at `at`; the paste tool stays out for more. */
@@ -100,12 +102,13 @@ export const useFactory = create<FactoryState>()((set, get) => {
       tiles: sel.tiles.filter((id) => tileIds.has(id)),
       belt: sel.belt && tileIds.has(sel.belt) ? sel.belt : null,
       arrow: sel.arrow && p.arrows.some((a) => a.id === sel.arrow) ? sel.arrow : null,
+      area: sel.area && p.areas.some((a) => a.id === sel.area) ? sel.area : null,
       item: sel.item && p.items.some((i) => i.id === sel.item) ? sel.item : null,
     };
   };
 
   return {
-    pipeline: { id: '', name: '', description: '', items: [], blueprints: [], nodes: [], belts: [], arrows: [], view: { x: 0, y: 0, zoom: 1 }, createdAt: 0, updatedAt: 0 },
+    pipeline: { id: '', name: '', description: '', items: [], blueprints: [], nodes: [], belts: [], arrows: [], areas: [], view: { x: 0, y: 0, zoom: 1 }, createdAt: 0, updatedAt: 0 },
     view: { x: 0, y: 0, zoom: 1 },
     selection: EMPTY_SELECTION,
     past: [],
@@ -210,6 +213,18 @@ export const useFactory = create<FactoryState>()((set, get) => {
       if (!get().copySelection()) return;
       get().deleteSelection();
       get().notify('Cut · Ctrl V to paste');
+    },
+
+    areaFromSelection: () => {
+      const { selection, pipeline } = get();
+      const color = SWATCHES[pipeline.areas.length % SWATCHES.length];
+      const area = ops.areaAround(pipeline, selection.nodes, selection.tiles, `Area ${pipeline.areas.length + 1}`, color);
+      if (!area) {
+        get().notify('Select buildings first (Shift or Ctrl + drag), or use the Area tool (7)');
+        return;
+      }
+      get().edit((p) => void p.areas.push(area));
+      set({ selection: { ...EMPTY_SELECTION, area: area.id } });
     },
 
     startPaste: () => {
@@ -326,6 +341,8 @@ export const useFactory = create<FactoryState>()((set, get) => {
           ops.removeNodes(p, selection.nodes);
           ops.removeTiles(p, selection.tiles);
         });
+      } else if (selection.area) {
+        get().edit((p) => void (p.areas = p.areas.filter((a) => a.id !== selection.area)));
       } else if (selection.arrow) {
         get().edit((p) => ops.removeArrow(p, selection.arrow!));
       } else if (selection.belt) {
