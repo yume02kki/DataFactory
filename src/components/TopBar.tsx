@@ -5,6 +5,7 @@ import * as storage from '../model/storage';
 import { useFactory } from '../store/useFactory';
 import { fitToView, zoomBy } from '../lib/viewport';
 import type { ExportFormat } from '../lib/exportImage';
+import { useTheme } from '../lib/theme';
 import { runExport } from './Canvas';
 
 export function openPipeline(p: ReturnType<typeof blankPipeline>, fit = true) {
@@ -31,6 +32,7 @@ export function TopBar({ saved, onHelp }: { saved: boolean; onHelp: () => void }
   const canUndo = useFactory((s) => s.past.length > 0);
   const canRedo = useFactory((s) => s.future.length > 0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, toggleTheme] = useTheme();
   const [exportOpen, setExportOpen] = useState(false);
   const { edit, undo, redo, toggleFlow } = useFactory.getState();
 
@@ -88,6 +90,9 @@ export function TopBar({ saved, onHelp }: { saved: boolean; onHelp: () => void }
           ⤢
         </button>
         <span className="divider" />
+        <button className="icon-btn theme-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} aria-label="Toggle dark mode">
+          {theme === 'dark' ? '☀' : '☾'}
+        </button>
         <button className="icon-btn" onClick={onHelp} title="Controls (?)" aria-label="Help">
           ?
         </button>

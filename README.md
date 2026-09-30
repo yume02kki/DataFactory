@@ -109,6 +109,7 @@ It plays like shapez.io: pick a tool, left-click to build, right-click to destro
 | See what a belt carries | Hover the belt (or select it) to show its item label |
 | Highlight a flow | Hover an item in the palette to see every belt and building that handles it |
 | Pause the animation | `P` or **Pause flow** |
+| Dark / light mode | The ☾ / ☀ button in the top bar (starts from your system setting, then remembers your choice) |
 
 Press `?` in the app for the full list.
 

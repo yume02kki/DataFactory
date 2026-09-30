@@ -15,7 +15,7 @@ const HALF = CELL / 2;
 /** Chevrons per tile, and how long the belt takes to move one chevron along (in step with items). */
 const CHEVRONS_PER_TILE = 4;
 export const BELT_STEP_SECONDS = CELL / CHEVRONS_PER_TILE / BELT_SPEED;
-const CHEVRON = 'M -2.7 -3.9 L 2.9 0 L -2.7 3.9 Z';
+const CHEVRON = 'M -3.5 -5.2 L 3.8 0 L -3.5 5.2 Z';
 
 /** Path of one tile: from the edge items arrive at to the far edge; turns are true quarter circles. */
 export function tilePath(x: number, y: number, dir: Dir, inflow: Dir): string {
@@ -163,7 +163,7 @@ export const LinkItems = memo(
                 path={geo.d}
                 calcMode="linear"
               />
-              {item ? <LayeredGlyph layers={lookOf(item)} r={7.5} /> : <circle className="blank-item" r={4} />}
+              {item ? <LayeredGlyph layers={lookOf(item)} r={8.5} /> : <circle className="blank-item" r={4} />}
             </g>
           ))}
         </g>

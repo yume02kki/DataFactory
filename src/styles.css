@@ -1,55 +1,64 @@
+/*
+ * Colours follow shapez.io's own light and dark themes (src/js/game/themes and
+ * src/css/variables.scss in the shapez repo). The theme is set on <html
+ * data-theme>, from the toggle or the system preference.
+ */
 :root {
-  /* Palette follows the light theme of shapez.io: pale floor, soft grid, grey belts, #55575a outlines. */
   --floor: #eceef2;
-  --grid: #e1e5e9;
+  --grid: #e3e7ea;
   --ink: #55575a;
-  --text: #3a3d44;
-  --muted: #7a808c;
-  --plate: #e4e6ea;
+  --text: #393747;
+  --muted: #7d808a;
+  --plate: #e1e4ed;
   --port: #5f6268;
-  --port-arrow: #d9dce1;
-  --panel: rgba(255, 255, 255, 0.95);
-  --panel-solid: #ffffff;
-  --panel-border: rgba(60, 64, 72, 0.12);
-  --field: #f1f2f5;
-  --field-border: #dcdfe5;
-  --hover: #eceef2;
+  --port-arrow: #dee1ea;
+  --panel: rgba(250, 251, 253, 0.96);
+  --panel-solid: #fbfcfd;
+  --panel-border: rgba(57, 55, 71, 0.12);
+  --field: #eef0f4;
+  --field-border: #d4d8e1;
+  --hover: #e6e9f0;
   --belt: #d3d5da;
   --belt-edge: #a9acb3;
   --belt-chevron: #b6b9c0;
-  --select: #4aa3df;
-  --valid: #34a853;
+  --select: #4a97df;
+  --valid: #66bb6a;
   --invalid: #ef5072;
+  --warn: #ef9d50;
   --pill: #55575a;
+  --flow-on-bg: #e3f3e4;
+  --flow-on-border: #b5dfb7;
+  --flow-on-text: #2e7d32;
   --shadow: 0 4px 18px rgba(40, 50, 65, 0.1), 0 1px 3px rgba(40, 50, 65, 0.08);
   --radius: 10px;
   --font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --floor: #3a3c43;
-    --grid: #43464e;
-    --ink: #2b2d31;
-    --text: #e8eaef;
-    --muted: #a3a9b4;
-    --plate: #cfd2d8;
-    --port: #2b2d31;
-    --port-arrow: #9ea3ab;
-    --panel: rgba(49, 51, 58, 0.96);
-    --panel-solid: #31333a;
-    --panel-border: rgba(255, 255, 255, 0.08);
-    --field: #2a2c32;
-    --field-border: #4a4d56;
-    --hover: #40434b;
-    --belt: #6b6e76;
-    --belt-edge: #505359;
-    --belt-chevron: #83878f;
-    --pill: #25272b;
-    --shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
-    color-scheme: dark;
-  }
+:root[data-theme='dark'] {
+  --floor: #3e3f47;
+  --grid: rgba(255, 255, 255, 0.035);
+  --ink: #111418;
+  --text: #e9eaef;
+  --muted: #a4a8b3;
+  --plate: #cfd2da;
+  --port: #1c1e23;
+  --port-arrow: #9ea3ad;
+  --panel: rgba(72, 76, 88, 0.96);
+  --panel-solid: #484c58;
+  --panel-border: rgba(255, 255, 255, 0.07);
+  --field: #3d4049;
+  --field-border: #5a5e6b;
+  --hover: #555a67;
+  --belt: #5f626c;
+  --belt-edge: #45474f;
+  --belt-chevron: #7b7f8a;
+  --pill: #26282e;
+  --flow-on-bg: #34453a;
+  --flow-on-border: #4b6a51;
+  --flow-on-text: #8fdc93;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
 }
 
 * {
@@ -285,12 +294,12 @@ kbd {
 
 .belt-edge path {
   stroke: var(--belt-edge);
-  stroke-width: 24.5;
+  stroke-width: 33;
 }
 
 .belt-surface path {
   stroke: var(--belt);
-  stroke-width: 22;
+  stroke-width: 30;
 }
 
 .belt-chevrons path {
@@ -332,7 +341,7 @@ kbd {
 
 .belt-glow path {
   stroke: var(--select);
-  stroke-width: 30;
+  stroke-width: 40;
   stroke-opacity: 0.45;
 }
 
@@ -847,18 +856,11 @@ select:focus {
 }
 
 .flow-btn.on {
-  background: #e7f6ec;
-  border-color: #b9e3c6;
-  color: #1f7a3d;
+  background: var(--flow-on-bg);
+  border-color: var(--flow-on-border);
+  color: var(--flow-on-text);
 }
 
-@media (prefers-color-scheme: dark) {
-  .flow-btn.on {
-    background: #1f3a2a;
-    border-color: #2f5a3f;
-    color: #8fe0a9;
-  }
-}
 
 .zoom-level {
   min-width: 48px;
