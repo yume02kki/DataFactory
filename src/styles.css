@@ -1574,3 +1574,48 @@ select:focus {
     display: none;
   }
 }
+
+/* ---------- export ---------- */
+
+.canvas-wrap.picking {
+  cursor: crosshair;
+}
+
+.export-marquee {
+  fill: rgba(74, 163, 223, 0.08);
+  stroke-dasharray: none;
+  stroke-width: 2;
+}
+
+.pick-hint {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(40, 42, 48, 0.88);
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.pick-hint kbd {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: transparent;
+  color: #fff;
+}
+
+.menu-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.menu-check input {
+  width: auto;
+}

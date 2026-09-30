@@ -5,11 +5,24 @@ import * as ops from '../model/ops';
 import type { Dir, NodeKind } from '../model/types';
 import { useFactory } from '../store/useFactory';
 import { CANVAS_ID, pointer, zoomAt } from '../lib/viewport';
+import { exportFactory, type ExportFormat } from '../lib/exportImage';
 import { BeltTiles, LinkItems } from './BeltView';
 import { NodeView } from './NodeView';
 import { BuildingArt } from './BuildingArt';
 
 export const DND_MIME = 'application/x-datafactory';
+
+/** Exports with progress and error toasts. */
+export async function runExport(format: ExportFormat, region?: Rect, grid = false) {
+  const { notify } = useFactory.getState();
+  notify(format === 'gif' ? 'Rendering GIF…' : 'Rendering PNG…');
+  try {
+    await exportFactory(format, region, { grid });
+    notify(`Exported ${format.toUpperCase()}`);
+  } catch (err) {
+    notify(err instanceof Error ? err.message : 'Export failed');
+  }
+}
 
 export type DragPayload = { type: 'item'; id: string };
 
@@ -28,7 +41,8 @@ type Gesture =
       nodeId: string | null;
       narrowOnClick: boolean;
     }
-  | { type: 'marquee'; start: Pt; baseNodes: string[]; baseTiles: string[] };
+  | { type: 'marquee'; start: Pt; baseNodes: string[]; baseTiles: string[] }
+  | { type: 'exportArea'; start: Pt };
 
 const cellOf = (w: Pt): Pt => ({ x: Math.floor(w.x / CELL), y: Math.floor(w.y / CELL) });
 
@@ -47,6 +61,7 @@ export function Canvas() {
   const flowing = useFactory((s) => s.flowing);
   const highlightItem = useFactory((s) => s.highlightItem);
   const tool = useFactory((s) => s.tool);
+  const exportArea = useFactory((s) => s.exportArea);
   const rotation = useFactory((s) => s.rotation);
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -143,6 +158,13 @@ export function Canvas() {
     const state = useFactory.getState();
     svgRef.current?.setPointerCapture(e.pointerId);
     (document.activeElement as HTMLElement | null)?.blur?.();
+
+    // Picking an area to export: left-drag a box, right-click cancels.
+    if (state.exportArea && e.button !== 1 && !spaceHeld.current) {
+      if (e.button === 2) state.setExportArea(null);
+      else gesture.current = { type: 'exportArea', start: world };
+      return;
+    }
 
     if (e.button === 1 || (e.button === 0 && spaceHeld.current)) {
       gesture.current = { type: 'pan', sx: e.clientX, sy: e.clientY, vx: state.view.x, vy: state.view.y, moved: false, clearOnClick: false };
@@ -277,6 +299,11 @@ export function Canvas() {
       return;
     }
 
+    if (g.type === 'exportArea') {
+      setMarquee(normalizeRect(g.start, world));
+      return;
+    }
+
     if (g.type === 'marquee') {
       const rect = normalizeRect(g.start, world);
       setMarquee(rect);
@@ -319,6 +346,17 @@ export function Canvas() {
       state.selectNodes([g.nodeId]);
     } else if (g.type === 'marquee') {
       setMarquee(null);
+    } else if (g.type === 'exportArea') {
+      setMarquee(null);
+      const area = state.exportArea;
+      const rect = normalizeRect(g.start, toWorld(e.clientX, e.clientY));
+      if (!area) return;
+      if (rect.w * state.view.zoom < 8 || rect.h * state.view.zoom < 8) {
+        state.notify('Drag a box around the part to export');
+        return;
+      }
+      state.setExportArea(null);
+      runExport(area.format, rect, area.grid);
     }
   };
 
@@ -422,7 +460,7 @@ export function Canvas() {
     <div
       id={CANVAS_ID}
       ref={wrapRef}
-      className={`canvas-wrap${flowing ? ' flowing' : ' paused'}${panning ? ' panning' : ''}${tool ? ' building' : ''}`}
+      className={`canvas-wrap${flowing ? ' flowing' : ' paused'}${panning ? ' panning' : ''}${tool ? ' building' : ''}${exportArea ? ' picking' : ''}`}
       onDragOver={onDragOver}
       onDrop={onDrop}
       onContextMenu={(e) => e.preventDefault()}
@@ -483,12 +521,17 @@ export function Canvas() {
               )}
             </g>
           )}
-          {hover && !tool && (
+          {hover && !tool && !exportArea && (
             <rect className="hover-cell" x={hover.x * CELL} y={hover.y * CELL} width={CELL} height={CELL} rx={4} />
           )}
-          {marquee && <rect className="marquee" x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} />}
+          {marquee && <rect className={exportArea ? 'marquee export-marquee' : 'marquee'} x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} />}
         </g>
       </svg>
+      {exportArea && (
+        <div className="pick-hint">
+          Drag a box around what to export as <b>{exportArea.format.toUpperCase()}</b> · <kbd>Esc</kbd> or right-click to cancel
+        </div>
+      )}
     </div>
   );
 }

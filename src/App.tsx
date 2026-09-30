@@ -92,7 +92,8 @@ export default function App() {
         e.preventDefault();
         s.deleteSelection();
       } else if (key === 'escape') {
-        if (s.tool) s.setTool(null);
+        if (s.exportArea) s.setExportArea(null);
+        else if (s.tool) s.setTool(null);
         else s.clearSelection();
         setHelp(false);
       } else if (mod) {

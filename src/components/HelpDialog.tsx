@@ -20,6 +20,7 @@ const CONTROLS: Array<[string, string]> = [
   ['Del / Backspace', 'Delete selection'],
   ['Ctrl Z · Ctrl Shift Z', 'Undo · Redo'],
   ['P', 'Pause / run the flow animation'],
+  ['Export ▾', 'Save a PNG or animated GIF of the whole factory or a dragged area'],
 ];
 
 export function HelpDialog({ onClose }: { onClose: () => void }) {

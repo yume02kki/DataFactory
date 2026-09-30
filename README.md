@@ -79,6 +79,15 @@ It plays like shapez.io: pick a tool, left-click to build, right-click to destro
 
 Press `?` in the app for the full list.
 
+## Exporting images
+
+**Export ▾** in the top bar saves the factory as a **PNG** (rendered at 2×) or an
+animated **GIF** of items moving along the belts, which loops without a jump.
+Either can cover the **whole factory** or a **selected area**: pick *Select an
+area…* and drag a box over the floor (`Esc` or right-click cancels). Tick
+*Include the grid* to keep the floor grid in the image. Exports use the current
+light or dark theme and leave out selection and hover highlights.
+
 ## Saving
 
 Factories autosave to your browser's `localStorage`, including where you were

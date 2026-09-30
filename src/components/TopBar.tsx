@@ -4,6 +4,8 @@ import { blankPipeline, examplePipeline } from '../model/defaults';
 import * as storage from '../model/storage';
 import { useFactory } from '../store/useFactory';
 import { fitToView, zoomBy } from '../lib/viewport';
+import type { ExportFormat } from '../lib/exportImage';
+import { runExport } from './Canvas';
 
 export function openPipeline(p: ReturnType<typeof blankPipeline>, fit = true) {
   const state = useFactory.getState();
@@ -29,6 +31,7 @@ export function TopBar({ saved, onHelp }: { saved: boolean; onHelp: () => void }
   const canUndo = useFactory((s) => s.past.length > 0);
   const canRedo = useFactory((s) => s.future.length > 0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const { edit, undo, redo, toggleFlow } = useFactory.getState();
 
   return (
@@ -50,6 +53,12 @@ export function TopBar({ saved, onHelp }: { saved: boolean; onHelp: () => void }
             Factories ▾
           </button>
           {menuOpen && <FactoriesMenu onClose={() => setMenuOpen(false)} />}
+        </div>
+        <div className="menu-anchor">
+          <button className={`btn ghost${exportOpen ? ' active' : ''}`} onClick={() => setExportOpen((o) => !o)} aria-haspopup="menu" aria-expanded={exportOpen}>
+            Export ▾
+          </button>
+          {exportOpen && <ExportMenu onClose={() => setExportOpen(false)} />}
         </div>
         <span className="counts">{counts}</span>
       </div>
@@ -188,6 +197,52 @@ function FactoriesMenu({ onClose }: { onClose: () => void }) {
           onClose();
         }}
       />
+    </div>
+  );
+}
+
+function ExportMenu({ onClose }: { onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [grid, setGrid] = useState(false);
+
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node) && !(e.target as Element).closest('.menu-anchor')) onClose();
+    };
+    window.addEventListener('pointerdown', onDown);
+    return () => window.removeEventListener('pointerdown', onDown);
+  }, [onClose]);
+
+  const whole = (format: ExportFormat) => {
+    onClose();
+    runExport(format, undefined, grid);
+  };
+  const area = (format: ExportFormat) => {
+    onClose();
+    useFactory.getState().setExportArea({ format, grid });
+  };
+
+  return (
+    <div className="menu" ref={ref} role="menu">
+      <div className="menu-label">Image (PNG)</div>
+      <button className="menu-item" onClick={() => whole('png')}>
+        <span>▣</span> Whole factory
+      </button>
+      <button className="menu-item" onClick={() => area('png')}>
+        <span>⬚</span> Select an area…
+      </button>
+      <div className="menu-sep" />
+      <div className="menu-label">Animation (GIF)</div>
+      <button className="menu-item" onClick={() => whole('gif')}>
+        <span>▣</span> Whole factory
+      </button>
+      <button className="menu-item" onClick={() => area('gif')}>
+        <span>⬚</span> Select an area…
+      </button>
+      <div className="menu-sep" />
+      <label className="menu-check">
+        <input type="checkbox" checked={grid} onChange={(e) => setGrid(e.target.checked)} /> Include the grid
+      </label>
     </div>
   );
 }

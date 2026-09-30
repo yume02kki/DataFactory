@@ -30,6 +30,8 @@ export interface FactoryState {
   tool: Tool | null;
   /** Rotation used for the next building or belt tile placed. */
   rotation: Dir;
+  /** Set while the user drags a box to choose what to export. */
+  exportArea: { format: 'png' | 'gif'; grid: boolean } | null;
 
   loadPipeline: (p: Pipeline) => void;
   /** Applies a change to the pipeline. Edits sharing a `coalesce` key within a short window form one undo step. */
@@ -45,6 +47,7 @@ export interface FactoryState {
   clearSelection: () => void;
 
   setTool: (tool: Tool | null) => void;
+  setExportArea: (area: FactoryState['exportArea']) => void;
   /** R: rotates the ghost while building, otherwise the selected buildings. */
   rotate: (steps: number, hoverCell?: Pt | null) => void;
 
@@ -101,6 +104,7 @@ export const useFactory = create<FactoryState>()((set, get) => {
     toast: null,
     tool: null,
     rotation: 0,
+    exportArea: null,
 
     loadPipeline: (p) =>
       set({ pipeline: p, view: p.view, selection: EMPTY_SELECTION, past: [], future: [], lastEdit: null, highlightItem: null, tool: null }),
@@ -163,7 +167,8 @@ export const useFactory = create<FactoryState>()((set, get) => {
 
     clearSelection: () => set({ selection: EMPTY_SELECTION }),
 
-    setTool: (tool) => set({ tool }),
+    setTool: (tool) => set({ tool, exportArea: null }),
+    setExportArea: (exportArea) => set({ exportArea, tool: exportArea ? null : get().tool }),
 
     rotate: (steps, hoverCell) => {
       const { tool, selection, pipeline } = get();
