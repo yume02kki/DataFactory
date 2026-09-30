@@ -108,6 +108,11 @@ export interface BeltTile {
   x: number;
   y: number;
   dir: Dir;
+  /**
+   * Extra sides this tile also sends items out of, so one belt splits into
+   * several (each copy carries the same items). Absent when it has none.
+   */
+  branches?: Dir[];
   /** Item explicitly assigned to the belt line that starts at this tile. */
   itemId: string | null;
   description: string;

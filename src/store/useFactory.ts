@@ -139,6 +139,7 @@ export const useFactory = create<FactoryState>()((set, get) => {
         // (dragging, painting) skip this and settle when they end.
         if (history) ops.mergeTouching(draft);
         // Keep combined item looks in step with whatever just changed.
+        ops.pruneBranches(draft);
         ops.applyRecipes(draft);
         draft.updatedAt = now;
       });
@@ -291,7 +292,9 @@ export const useFactory = create<FactoryState>()((set, get) => {
       if (tile) {
         get().edit((p) => {
           const t = p.belts.find((x) => x.id === tile.id);
-          if (t) t.dir = rotateDir(t.dir, steps);
+          if (!t) return;
+          t.dir = rotateDir(t.dir, steps);
+          if (t.branches) t.branches = t.branches.map((b) => rotateDir(b, steps));
         });
         return;
       }

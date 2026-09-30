@@ -94,33 +94,37 @@ interface TileProps {
  * join into one continuous band, in the style of shapez.io's conveyors.
  */
 export const BeltTiles = memo(function BeltTiles({ tiles, inflow, className = '', selected, dimmed }: TileProps) {
-  const paths = tiles.map((t) => {
+  // A splitting tile is drawn once per way out: straight on, plus a curve peeling off per branch.
+  const paths = tiles.flatMap((t) => {
     const from = inflow.get(t.id) ?? t.dir;
-    return { t, from, d: tilePath(t.x, t.y, t.dir, from) };
+    const main = { t, key: t.id, dir: t.dir, from, d: tilePath(t.x, t.y, t.dir, from) };
+    if (!t.branches) return [main];
+    const extra = t.branches.filter((b) => b !== opposite(from)).map((b) => ({ t, key: `${t.id}:${b}`, dir: b, from, d: tilePath(t.x, t.y, b, from) }));
+    return [...extra, main];
   });
   const cls = (t: BeltTile) => `${selected?.has(t.id) ? ' sel' : ''}${dimmed?.has(t.id) ? ' dim' : ''}`;
   return (
     <g className={`belt-tiles ${className}`} style={{ ['--belt-step' as string]: `${BELT_STEP_SECONDS}s` }}>
       {selected && selected.size > 0 && (
         <g className="belt-glow">
-          {paths.filter(({ t }) => selected.has(t.id)).map(({ t, d }) => <path key={t.id} d={d} />)}
+          {paths.filter(({ t }) => selected.has(t.id)).map(({ key, d }) => <path key={key} d={d} />)}
         </g>
       )}
       <g className="belt-edge">
-        {paths.map(({ t, d }) => (
-          <path key={t.id} d={d} className={cls(t)} />
+        {paths.map(({ t, key, d }) => (
+          <path key={key} d={d} className={cls(t)} />
         ))}
       </g>
       <g className="belt-surface">
-        {paths.map(({ t, d }) => (
-          <path key={t.id} d={d} className={cls(t)} />
+        {paths.map(({ t, key, d }) => (
+          <path key={key} d={d} className={cls(t)} />
         ))}
       </g>
       <g className="belt-chevrons">
-        {paths.map(({ t, from }) => {
-          const ch = tileChevrons(t.dir, from);
+        {paths.map(({ t, key, dir, from }) => {
+          const ch = tileChevrons(dir, from);
           return (
-            <svg key={t.id} className={`chev-tile${cls(t)}`} x={t.x * CELL} y={t.y * CELL} width={CELL} height={CELL} overflow="hidden">
+            <svg key={key} className={`chev-tile${cls(t)}`} x={t.x * CELL} y={t.y * CELL} width={CELL} height={CELL} overflow="hidden">
               <g className={ch.turn ? 'chev-turn' : 'chev-move'} style={ch.style}>
                 {ch.marks.map((m, i) => (
                   <path key={i} d={CHEVRON} transform={`translate(${m.x.toFixed(2)} ${m.y.toFixed(2)}) rotate(${m.angle.toFixed(1)})`} />

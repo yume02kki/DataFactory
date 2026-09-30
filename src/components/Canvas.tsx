@@ -31,7 +31,7 @@ export type DragPayload = { type: 'item'; id: string };
 
 type Gesture =
   | { type: 'pan'; sx: number; sy: number; vx: number; vy: number; moved: boolean; clearOnClick: boolean; pickCell?: Pt }
-  | { type: 'paint'; last: Pt; changed: boolean }
+  | { type: 'paint'; last: Pt; changed: boolean; keep: Set<string>; branch: boolean }
   | { type: 'place'; last: Pt; placed: number }
   | { type: 'erase'; last: Pt; erased: boolean; moved: boolean }
   | {
@@ -260,9 +260,12 @@ export function Canvas() {
     if (tool?.type === 'belt') {
       // Belts are laid live as the cursor moves, like shapez: first tile points the current way.
       state.checkpoint();
+      // Belts already on the floor get joined (merge into / split off), not rewritten.
+      const keep = new Set(state.pipeline.belts.map((t) => t.id));
+      const onBelt = state.pipeline.belts.some((t) => t.x === cell.x && t.y === cell.y);
       let changed = false;
-      state.edit((p) => void (changed = ops.paintBelt(p, [{ ...cell, dir: state.rotation }]) > 0), { history: false });
-      gesture.current = { type: 'paint', last: cell, changed };
+      if (!onBelt) state.edit((p) => void (changed = ops.paintBelt(p, [{ ...cell, dir: state.rotation }]) > 0), { history: false });
+      gesture.current = { type: 'paint', last: cell, changed, keep, branch: onBelt };
       return;
     }
 
@@ -332,7 +335,8 @@ export function Canvas() {
       state.edit(
         (p) => {
           for (const to of steps) {
-            if (ops.extendBelt(p, from, to)) g.changed = true;
+            if (ops.extendBelt(p, from, to, g.keep, g.branch)) g.changed = true;
+            g.branch = false;
             from = to;
           }
         },
@@ -693,7 +697,7 @@ export function Canvas() {
           <g className="layer-items">
             {links.map((l) => (
               <LinkItems
-                key={l.id}
+                key={l.key}
                 link={l}
                 item={l.itemId ? itemsById.get(l.itemId) ?? null : null}
                 dimmed={!!activeItem && l.itemId !== activeItem}

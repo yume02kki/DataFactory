@@ -587,3 +587,77 @@ describe('areas', () => {
     expect(examplePipeline().areas.length).toBeGreaterThan(0);
   });
 });
+
+describe('joining belts', () => {
+  /** source (0,0) → belt → machine (4,0), plus a second machine at (2,3) facing down. */
+  function splitFactory() {
+    const { p, src, mac } = tinyFactory();
+    p.nodes = p.nodes.filter((n) => n.kind !== 'store');
+    const low = { ...makeNode('machine', 2, 3), rotation: 1 as Dir };
+    p.nodes.push(low);
+    ops.paintBelt(p, row(1, 3, 0));
+    return { p, src, mac, low };
+  }
+  const drag = (p: ReturnType<typeof blankPipeline>, cells: Array<{ x: number; y: number }>) => {
+    const keep = new Set(p.belts.map((t) => t.id));
+    const onBelt = p.belts.some((t) => t.x === cells[0].x && t.y === cells[0].y);
+    for (let i = 1; i < cells.length; i++) ops.extendBelt(p, cells[i - 1], cells[i], keep, onBelt && i === 1);
+    ops.pruneBranches(p);
+  };
+
+  it('splits a belt when dragging sideways out of the middle of it', () => {
+    const { p, mac, low } = splitFactory();
+    drag(p, [
+      { x: 2, y: 0 },
+      { x: 2, y: 1 },
+      { x: 2, y: 2 },
+    ]);
+    const mid = p.belts.find((t) => t.x === 2 && t.y === 0)!;
+    expect(mid.dir).toBe(0);
+    expect(mid.branches).toEqual([1]);
+    const to = ops.traceLinks(p).map((l) => l.to);
+    expect(to).toEqual(expect.arrayContaining([mac.id, low.id]));
+    expect(new Set(ops.traceLinks(p).map((l) => l.key)).size).toBe(2);
+  });
+
+  it('merges a belt dragged into the side of another', () => {
+    const { p, src, mac } = splitFactory();
+    p.nodes = p.nodes.filter((n) => n.y !== 3);
+    const side = makeNode('source', 2, 3);
+    side.rotation = 3;
+    p.nodes.push(side);
+    // The click lays the first tile, then the drag runs up into the old belt.
+    ops.paintBelt(p, [{ x: 2, y: 2, dir: 3 }]);
+    drag(p, [
+      { x: 2, y: 2 },
+      { x: 2, y: 1 },
+      { x: 2, y: 0 },
+    ]);
+    expect(p.belts.find((t) => t.x === 2 && t.y === 0)!.dir).toBe(0);
+    const froms = ops.traceLinks(p).filter((l) => l.to === mac.id).map((l) => l.from);
+    expect(froms).toEqual(expect.arrayContaining([src.id, side.id]));
+  });
+
+  it('forgets a branch once the belt it fed is gone', () => {
+    const { p } = splitFactory();
+    drag(p, [
+      { x: 2, y: 0 },
+      { x: 2, y: 1 },
+    ]);
+    const mid = p.belts.find((t) => t.x === 2 && t.y === 0)!;
+    expect(mid.branches).toEqual([1]);
+    ops.eraseCell(p, 2, 1);
+    ops.pruneBranches(p);
+    expect(mid.branches).toBeUndefined();
+  });
+
+  it('keeps branches through save and load', () => {
+    const { p } = splitFactory();
+    drag(p, [
+      { x: 2, y: 0 },
+      { x: 2, y: 1 },
+    ]);
+    const back = normalizePipeline(JSON.parse(JSON.stringify(p)));
+    expect(back.belts.find((t) => t.x === 2 && t.y === 0)!.branches).toEqual([1]);
+  });
+});

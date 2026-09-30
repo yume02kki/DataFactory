@@ -385,10 +385,10 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
               <ArrowRow key={a.id} arrow={a} text={`${nameOf(a.from)} points here`} />
             ))}
             {incoming.map((l) => (
-              <ConnRow key={l.id} tileId={l.id} dir="in" other={nameOf(l.from)} item={l.itemId ? itemsById.get(l.itemId) : undefined} />
+              <ConnRow key={l.key} tileId={l.id} dir="in" other={nameOf(l.from)} item={l.itemId ? itemsById.get(l.itemId) : undefined} />
             ))}
             {outgoing.map((l) => (
-              <ConnRow key={l.id} tileId={l.id} dir="out" other={l.to ? nameOf(l.to) : 'nowhere (open end)'} item={l.itemId ? itemsById.get(l.itemId) : undefined} />
+              <ConnRow key={l.key} tileId={l.id} dir="out" other={l.to ? nameOf(l.to) : 'nowhere (open end)'} item={l.itemId ? itemsById.get(l.itemId) : undefined} />
             ))}
           </div>
         </Section>

@@ -99,7 +99,7 @@ It plays like shapez.io: pick a tool, left-click to build, right-click to destro
 | Build | Left-click the floor, or left-drag to paint blocks. Matching blocks that touch join into one building of any shape. A ghost shows where it will go and turns red when something is in the way |
 | Rotate | `R` / `Shift R` rotates the tool, the selected buildings, or the belt under the cursor |
 | Lay belts | With the belt tool, left-drag: each tile is laid as the cursor enters its cell, pointing the way you move; changing direction turns the tile behind into a corner (as in shapez) |
-| Connect | Items leave a building from the side with outward arrow tabs and enter from the side with inward tabs. Tabs only show where something is connected, plus on the selected building and while the belt tool is out. A belt from one building's output side into another's input side connects them. A belt that stops short shows a red end |
+| Connect | Items leave a building from the side with outward arrow tabs and enter from the side with inward tabs. Tabs only show where something is connected, plus on the selected building and while the belt tool is out. A belt from one building's output side into another's input side connects them. A belt that stops short shows a red end. Start a belt drag on the middle of an existing belt and head sideways to **split** it (every branch carries the same items); drag a belt into the side of another to **merge** into it |
 | Destroy | Right-click, or right-drag to destroy several things |
 | Put the tool away | Right-click empty floor, or `Esc` |
 | Pipette | `Q` or a middle click picks up the building (with all its settings) or belt under the cursor as the tool; middle-drag still pans |

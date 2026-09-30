@@ -165,18 +165,59 @@ export function gridSteps(a: Pt, b: Pt): Pt[] {
  * to point into the new cell (becoming a corner if the drag changed direction)
  * and a tile pointing the way of travel is laid in the new cell. Buildings are
  * never painted over; the tile before one just points into it.
+ *
+ * Belts that were there before the drag (`keep`) are joined rather than
+ * rewritten when the drag ends on them, so dragging into the side of a belt
+ * merges into it. With `branch`, a first step sideways out of a belt that
+ * already leads somewhere splits it instead of turning it.
  */
-export function extendBelt(p: Pipeline, from: Pt, to: Pt): boolean {
+export function extendBelt(p: Pipeline, from: Pt, to: Pt, keep?: Set<string>, branch = false): boolean {
   const dir = stepDir(from, to);
   const occ = occupancy(p);
   let changed = false;
   const prev = occ.get(cellKey(from.x, from.y))?.tile;
-  if (prev && prev.dir !== dir) {
+  if (prev && branch && leadsSomewhere(occ, prev)) {
+    if (dir !== prev.dir && dir !== opposite(prev.dir) && !prev.branches?.includes(dir)) {
+      prev.branches = [...(prev.branches ?? []), dir];
+      changed = true;
+    }
+  } else if (prev && prev.dir !== dir) {
     prev.dir = dir;
     changed = true;
   }
-  if (occ.get(cellKey(to.x, to.y))?.node) return changed;
+  const target = occ.get(cellKey(to.x, to.y));
+  if (target?.node) return changed;
+  // An old belt is only turned if the drag carries on out of it (above).
+  if (target?.tile && keep?.has(target.tile.id)) return changed;
   return paintBelt(p, [{ ...to, dir }]) > 0 || changed;
+}
+
+type Occupancy = ReturnType<typeof occupancy>;
+
+/** Whether a tile's front already runs into another belt or a building. */
+function leadsSomewhere(occ: Occupancy, t: BeltTile): boolean {
+  const [dx, dy] = DV[t.dir];
+  return occ.has(cellKey(t.x + dx, t.y + dy)) || !!t.branches?.length;
+}
+
+/** Every side a tile sends items out of: its direction first, then any branches. */
+export function tileOutputs(t: BeltTile): Dir[] {
+  return t.branches?.length ? [t.dir, ...t.branches] : [t.dir];
+}
+
+/** Drops branches that point backwards, repeat, or lead to an empty cell. */
+export function pruneBranches(p: Pipeline) {
+  if (!p.belts.some((t) => t.branches)) return;
+  const occ = occupancy(p);
+  for (const t of p.belts) {
+    if (!t.branches) continue;
+    const keep = t.branches.filter(
+      (b, i, all) => b !== t.dir && b !== opposite(t.dir) && all.indexOf(b) === i && occ.has(cellKey(t.x + DV[b][0], t.y + DV[b][1])),
+    );
+    if (keep.length) {
+      if (keep.length !== t.branches.length) t.branches = keep;
+    } else delete t.branches;
+  }
 }
 
 /** Removes whatever sits on a cell. Returns what was removed. */
@@ -253,8 +294,10 @@ export function removeItem(p: Pipeline, id: string) {
 
 /** A belt line: the tiles items travel along after leaving a building. */
 export interface Link {
-  /** Id of the first tile. */
+  /** Id of the first tile (shared by every branch of a split line). */
   id: string;
+  /** Unique per traced path, for React keys. */
+  key: string;
   from: string;
   /** The building the belt delivers into, or null when it ends in the open. */
   to: string | null;
@@ -263,7 +306,10 @@ export interface Link {
   itemId: string | null;
   /** Whether `itemId` was assigned by the user rather than inferred. */
   explicit: boolean;
-  /** World-space path for items: out of the building, through tile centres, into the next. */
+  /**
+   * World-space path for items: out of the building, through tile centres, into
+   * the next. A branch of a split belt starts at the tile it splits off at.
+   */
   points: Pt[];
 }
 
@@ -290,6 +336,7 @@ export function traceLinks(p: Pipeline): Link[] {
           const edge = { x: c.x - (bx * CELL) / 2, y: c.y - (by * CELL) / 2 };
           links.push({
             id: `${node.id}@${cell.x},${cell.y}`,
+            key: `${node.id}@${cell.x},${cell.y}`,
             from: node.id,
             to: direct.id,
             tiles: [],
@@ -303,41 +350,49 @@ export function traceLinks(p: Pipeline): Link[] {
       const first = occ.get(cellKey(cell.x, cell.y))?.tile;
       // A belt pointing back into the building can't take anything from it.
       if (!first || first.dir === opposite(node.rotation)) continue;
-      const tiles = [first];
-      const seen = new Set([first.id]);
-      let cur = first;
-      let to: FactoryNode | null = null;
-      for (;;) {
-        const [dx, dy] = DV[cur.dir];
-        const next = occ.get(cellKey(cur.x + dx, cur.y + dy));
-        if (next?.tile) {
-          if (seen.has(next.tile.id)) break;
-          seen.add(next.tile.id);
-          tiles.push(next.tile);
-          cur = next.tile;
-          continue;
-        }
-        const target = next?.node;
-        if (target && target.id !== node.id && KIND_META[target.kind].hasInput && cur.dir === target.rotation) to = target;
-        break;
-      }
+      // Follow the belt; where a tile splits, each branch becomes its own path.
       const [bx, by] = DV[node.rotation];
       const start = cellCenter(first.x, first.y);
-      const points: Pt[] = [{ x: start.x - (bx * CELL) / 2, y: start.y - (by * CELL) / 2 }];
-      for (const t of tiles) points.push(cellCenter(t.x, t.y));
-      const [ex, ey] = DV[cur.dir];
-      const last = points[points.length - 1];
-      const reach = to ? 0.5 : 0.35;
-      points.push({ x: last.x + ex * CELL * reach, y: last.y + ey * CELL * reach });
-      links.push({
-        id: first.id,
-        from: node.id,
-        to: to?.id ?? null,
-        tiles,
-        itemId: first.itemId ?? guessItem(node, to),
-        explicit: !!first.itemId,
-        points,
-      });
+      const origin: Pt = { x: start.x - (bx * CELL) / 2, y: start.y - (by * CELL) / 2 };
+      /** `from` is where this path's own items start: 0, or the tile it splits off at. */
+      const finish = (tiles: BeltTile[], dir: Dir, to: FactoryNode | null, key: string, from: number) => {
+        const own = tiles.slice(from).map((t) => cellCenter(t.x, t.y));
+        const points: Pt[] = from ? own : [origin, ...own];
+        const [ex, ey] = DV[dir];
+        const last = points[points.length - 1];
+        const reach = to ? 0.5 : 0.35;
+        points.push({ x: last.x + ex * CELL * reach, y: last.y + ey * CELL * reach });
+        links.push({
+          id: first.id,
+          key,
+          from: node.id,
+          to: to?.id ?? null,
+          tiles,
+          itemId: first.itemId ?? guessItem(node, to),
+          explicit: !!first.itemId,
+          points,
+        });
+      };
+      // Splits that loop back into merges could multiply paths; a cap keeps that sane.
+      let budget = 64;
+      const walk = (tiles: BeltTile[], seen: Set<string>, key: string, from: number) => {
+        const cur = tiles[tiles.length - 1];
+        tileOutputs(cur).forEach((dir, i) => {
+          const k = i === 0 ? key : `${key}>${cur.id}:${dir}`;
+          const f = i === 0 ? from : tiles.length - 1;
+          const [dx, dy] = DV[dir];
+          const next = occ.get(cellKey(cur.x + dx, cur.y + dy));
+          if (i > 0 && --budget < 0) return;
+          if (next?.tile && !seen.has(next.tile.id) && next.tile.dir !== opposite(dir)) {
+            walk([...tiles, next.tile], new Set(seen).add(next.tile.id), k, f);
+            return;
+          }
+          const target = next?.node;
+          const to = target && target.id !== node.id && KIND_META[target.kind].hasInput && dir === target.rotation ? target : null;
+          finish(tiles, dir, to, k, f);
+        });
+      };
+      walk([first], new Set([first.id]), first.id, 0);
     }
   }
   return links;
@@ -356,7 +411,7 @@ export function tileInflow(p: Pipeline): Map<string, Dir> {
     if (!feeds.has(t.id)) feeds.set(t.id, new Set());
     feeds.get(t.id)!.add(d);
   };
-  for (const t of p.belts) add(t.x + DV[t.dir][0], t.y + DV[t.dir][1], t.dir);
+  for (const t of p.belts) for (const d of tileOutputs(t)) add(t.x + DV[d][0], t.y + DV[d][1], d);
   for (const n of p.nodes) if (KIND_META[n.kind].hasOutput) for (const c of outputCells(n)) add(c.x, c.y, n.rotation);
   const out = new Map<string, Dir>();
   for (const t of p.belts) {
@@ -592,7 +647,7 @@ export function connectedPorts(p: Pipeline): Map<string, Set<string>> {
       for (const c of inputCells(n)) {
         const o = occ.get(cellKey(c.x, c.y));
         const feeds = o?.node && o.node.id !== n.id && KIND_META[o.node.kind].hasOutput && o.node.rotation === n.rotation;
-        if ((o?.tile && o.tile.dir === n.rotation) || feeds) used.add(portKey(back, c));
+        if ((o?.tile && tileOutputs(o.tile).includes(n.rotation)) || feeds) used.add(portKey(back, c));
       }
     }
     out.set(n.id, used);
@@ -663,7 +718,7 @@ export function rotateClip(clip: Clip, steps: number): Clip {
       setNodeCells(turned, nodeCells(node).map((c) => ({ x: -c.y, y: c.x })));
       return turned;
     });
-    const tiles = out.tiles.map((t) => ({ ...t, x: -t.y, y: t.x, dir: rotateDir(t.dir, 1) }));
+    const tiles = out.tiles.map((t) => ({ ...t, x: -t.y, y: t.x, dir: rotateDir(t.dir, 1), ...(t.branches && { branches: t.branches.map((b) => rotateDir(b, 1)) }) }));
     out = normalizeClip({ ...out, nodes, tiles });
   }
   return out;

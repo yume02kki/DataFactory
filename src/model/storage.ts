@@ -1,7 +1,7 @@
 import { ARROW_COLOR, KIND_META, NODE_KINDS, ITEM_SHAPES, starterBlueprints } from './defaults';
 import { uid } from './ids';
 import { inputCells, lPath, normalizeOffsets, outputCells } from './geometry';
-import { applyRecipes, mergeTouching, paintBelt } from './ops';
+import { applyRecipes, mergeTouching, paintBelt, pruneBranches } from './ops';
 import type { Arrow, BeltTile, Blueprint, CombineMode, Dir, FactoryNode, ItemType, Pipeline } from './types';
 
 // Preview channels (e.g. the /dev site) keep their own saved factories, so an
@@ -158,6 +158,7 @@ export function normalizePipeline(input: unknown): Pipeline {
       x: Math.round(num(o.x)),
       y: Math.round(num(o.y)),
       dir: ([0, 1, 2, 3].includes(o.dir as number) ? o.dir : 0) as Dir,
+      ...(Array.isArray(o.branches) && o.branches.length && { branches: o.branches.filter((d) => [0, 1, 2, 3].includes(d as number)) as Dir[] }),
       itemId: typeof o.itemId === 'string' && itemIds.has(o.itemId) ? o.itemId : null,
       description: str(o.description),
     }));
@@ -200,6 +201,7 @@ export function normalizePipeline(input: unknown): Pipeline {
   };
   // Older saves may have touching buildings of the same kind; they're one structure.
   mergeTouching(pipeline);
+  pruneBranches(pipeline);
   // Combined looks are always rebuilt from the machines rather than trusted from the file.
   applyRecipes(pipeline);
   return pipeline;
