@@ -29,6 +29,13 @@ On first launch the app opens the example **Visit Analytics** factory. Use
 | **Buffer** | Temporarily holds or transports data between machines | input side + output side |
 | **Store** | Where processed data ends up | input side |
 
+Every building is a 1×1 block, like a belt tile. Blocks of the same type placed
+side by side (across the flow) join into one **wide block**. It shows as a single
+building and has one port per block on each side. The example's validator is two
+blocks wide: one output carries valid visits, the other rejected ones. Destroying
+a block in the middle splits a wide block in two. Blocks placed directly in front
+of each other hand items over without a belt.
+
 The app is **technology-agnostic**. Nothing is built in for any specific tool.
 Every building has:
 
@@ -51,7 +58,7 @@ It plays like shapez.io: pick a tool, left-click to build, right-click to destro
 | Action | How |
 | --- | --- |
 | Pick a tool | Hotbar at the bottom: `1` Belt, `2` Source, `3` Machine, `4` Buffer, `5` Store. Clicking a palette tile picks that component type |
-| Build | Left-click the floor. A ghost shows where it will go and turns red when something is in the way |
+| Build | Left-click the floor, or left-drag to lay a row of blocks (a wide block). A ghost shows where it will go and turns red when something is in the way |
 | Rotate | `R` / `Shift R` rotates the tool, the selected buildings, or the belt under the cursor |
 | Lay belts | With the belt tool, left-drag. Belts follow an L-shaped path and point the way you drag |
 | Connect | Items leave a building from the side with outward arrow tabs and enter from the side with inward tabs. A belt from one building's output side into another's input side connects them. A belt that stops short shows a red end |

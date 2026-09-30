@@ -48,7 +48,15 @@ export interface FactoryState {
   /** R: rotates the ghost while building, otherwise the selected buildings. */
   rotate: (steps: number, hoverCell?: Pt | null) => void;
 
-  placeNode: (kind: NodeKind, at: Pt, rotation: Dir, blueprint?: Blueprint, template?: Partial<FactoryNode>) => string | null;
+  /** Places one 1×1 block (joining a matching neighbour into a wide block when it can). */
+  placeNode: (
+    kind: NodeKind,
+    at: Pt,
+    rotation: Dir,
+    blueprint?: Blueprint,
+    template?: Partial<FactoryNode>,
+    opts?: { history?: boolean },
+  ) => string | null;
   paintBelt: (cells: Array<Pt & { dir: Dir }>) => void;
   deleteSelection: () => void;
   duplicateSelection: () => void;
@@ -182,21 +190,32 @@ export const useFactory = create<FactoryState>()((set, get) => {
       set({ rotation: rotateDir(get().rotation, steps) });
     },
 
-    placeNode: (kind, at, rotation, blueprint, template) => {
+    placeNode: (kind, at, rotation, blueprint, template, opts = {}) => {
       const { pipeline } = get();
-      if (!ops.canPlaceNode(pipeline, kind, at.x, at.y, rotation)) return null;
-      const node = { ...makeNode(kind, at.x, at.y, blueprint, rotation), ...(template ?? {}), id: uid('node'), x: at.x, y: at.y, rotation, kind };
-      get().edit((p) => {
-        node.name = ops.copyName(p, node.name);
-        p.nodes.push({
-          ...node,
-          inputs: [...node.inputs],
-          outputs: [...node.outputs],
-          metadata: node.metadata.map((m) => ({ ...m, id: uid('m') })),
-        });
-        ops.syncLinkItems(p);
-      });
-      return node.id;
+      if (!ops.canPlaceNode(pipeline, at.x, at.y, rotation)) return null;
+      const base = { ...makeNode(kind, at.x, at.y, blueprint, rotation), ...(template ?? {}) };
+      let id: string | null = null;
+      get().edit(
+        (p) => {
+          id = ops.placeBlock(p, {
+            ...base,
+            id: uid('node'),
+            kind,
+            x: at.x,
+            y: at.y,
+            rotation,
+            size: 1,
+            // Only used when the block doesn't join a neighbour.
+            name: ops.copyName(p, base.name),
+            inputs: [...base.inputs],
+            outputs: [...base.outputs],
+            metadata: base.metadata.map((m) => ({ ...m, id: uid('m') })),
+          });
+          ops.syncLinkItems(p);
+        },
+        { history: opts.history ?? true },
+      );
+      return id;
     },
 
     paintBelt: (cells) => {

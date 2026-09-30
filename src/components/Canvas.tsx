@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KIND_META } from '../model/defaults';
-import { CELL, anchorFor, cellKey, lPath, nodeRect, normalizeRect, rectsIntersect, type Pt, type Rect } from '../model/geometry';
+import { CELL, cellKey, lPath, nodeRect, normalizeRect, rectsIntersect, type Pt, type Rect } from '../model/geometry';
 import * as ops from '../model/ops';
 import type { Dir, NodeKind } from '../model/types';
 import { useFactory } from '../store/useFactory';
@@ -15,6 +15,7 @@ export type DragPayload = { type: 'item'; id: string };
 type Gesture =
   | { type: 'pan'; sx: number; sy: number; vx: number; vy: number; moved: boolean; clearOnClick: boolean }
   | { type: 'paint'; start: Pt; axis: 'h' | 'v' | null }
+  | { type: 'place'; last: Pt; placed: number }
   | { type: 'erase'; last: Pt; erased: boolean; moved: boolean }
   | {
       type: 'drag';
@@ -127,6 +128,14 @@ export function Canvas() {
     return erased;
   };
 
+  const placeBlockAt = (cell: Pt) => {
+    const state = useFactory.getState();
+    const t = state.tool;
+    if (t?.type !== 'building') return null;
+    const blueprint = t.blueprintId ? state.pipeline.blueprints.find((b) => b.id === t.blueprintId) : undefined;
+    return state.placeNode(t.kind, cell, state.rotation, blueprint, t.template, { history: false });
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     const world = toWorld(e.clientX, e.clientY);
     const cell = cellOf(world);
@@ -156,10 +165,9 @@ export function Canvas() {
     }
 
     if (tool?.type === 'building') {
-      const at = anchorFor(tool.kind, state.rotation, cell);
-      const blueprint = tool.blueprintId ? state.pipeline.blueprints.find((b) => b.id === tool.blueprintId) : undefined;
-      const id = state.placeNode(tool.kind, at, state.rotation, blueprint, tool.template);
-      if (!id) state.notify('Something is in the way');
+      // Drag to lay a row of blocks; neighbours of the same type join into one wide block.
+      state.checkpoint();
+      gesture.current = { type: 'place', last: cell, placed: placeBlockAt(cell) ? 1 : 0 };
       return;
     }
 
@@ -218,6 +226,13 @@ export function Canvas() {
     if (g.type === 'paint') {
       if (!g.axis && (cell.x !== g.start.x || cell.y !== g.start.y)) g.axis = Math.abs(cell.x - g.start.x) >= Math.abs(cell.y - g.start.y) ? 'h' : 'v';
       setPaintPreview(lPath(g.start, cell, g.axis ?? 'h', state.rotation));
+      return;
+    }
+
+    if (g.type === 'place') {
+      if (cell.x === g.last.x && cell.y === g.last.y) return;
+      for (const c of cellsBetween(g.last, cell)) if (placeBlockAt(c)) g.placed++;
+      g.last = cell;
       return;
     }
 
@@ -287,6 +302,11 @@ export function Canvas() {
       // Keep drawing in the direction we were going, like shapez.
       const last = cells[cells.length - 1];
       if (last) useFactory.setState({ rotation: last.dir });
+    } else if (g.type === 'place') {
+      if (!g.placed) {
+        useFactory.setState((s) => ({ past: s.past.slice(0, -1) }));
+        state.notify('Something is in the way');
+      }
     } else if (g.type === 'erase') {
       if (!g.erased) {
         // Nothing destroyed: drop the history entry, and treat it as "cancel tool".
@@ -367,10 +387,10 @@ export function Canvas() {
       if (paintPreview) return null;
       return { belt: [{ id: 'ghost', x: hover.x, y: hover.y, dir: rotation, itemId: null, description: '' }] };
     }
-    const at = anchorFor(tool.kind, rotation, hover);
+    const at = hover;
     const blueprint = tool.blueprintId ? pipeline.blueprints.find((b) => b.id === tool.blueprintId) : undefined;
     const color = tool.template?.color ?? blueprint?.color ?? KIND_META[tool.kind].color;
-    const valid = ops.canPlaceNode(pipeline, tool.kind, at.x, at.y, rotation);
+    const valid = ops.canPlaceNode(pipeline, at.x, at.y, rotation);
     return { building: { kind: tool.kind as NodeKind, at, color, valid } };
   }, [hover, tool, rotation, pipeline, paintPreview]);
 
@@ -441,15 +461,15 @@ export function Canvas() {
           {previewTiles && <BeltTiles tiles={previewTiles.tiles} inflow={previewTiles.inflow} className="belt-ghost" />}
           {ghost?.building && (
             <g className={`ghost-building${ghost.building.valid ? '' : ' invalid'}`}>
-              <RotatedArt kind={ghost.building.kind} rotation={rotation} color={ghost.building.color} x={ghost.building.at.x * CELL} y={ghost.building.at.y * CELL} />
+              <RotatedArt kind={ghost.building.kind} rotation={rotation} size={1} color={ghost.building.color} x={ghost.building.at.x * CELL} y={ghost.building.at.y * CELL} />
               {!ghost.building.valid && (
                 <rect
                   className="ghost-block"
                   x={ghost.building.at.x * CELL}
                   y={ghost.building.at.y * CELL}
-                  width={nodeRect({ kind: ghost.building.kind, x: 0, y: 0, rotation }).w}
-                  height={nodeRect({ kind: ghost.building.kind, x: 0, y: 0, rotation }).h}
-                  rx={8}
+                  width={CELL}
+                  height={CELL}
+                  rx={7}
                 />
               )}
             </g>

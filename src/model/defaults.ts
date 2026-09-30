@@ -131,6 +131,7 @@ export function makeNode(
     x,
     y,
     rotation,
+    size: 1,
     inputs: [],
     outputs: [],
     metadata: [],
@@ -236,7 +237,7 @@ export function examplePipeline(): Pipeline {
     outputs: [visit.id],
     description: 'Receives page visits from the website tracker.',
   });
-  const enrich = node('machine', 'Enricher', 'Enrichment Machine', 'Custom Python Service', 8, 0, {
+  const enrich = node('machine', 'Enricher', 'Enrichment Machine', 'Custom Python Service', 5, 0, {
     inputs: [visit.id],
     outputs: [enriched.id],
     description: 'Adds geo and device info to each visit.',
@@ -245,27 +246,28 @@ export function examplePipeline(): Pipeline {
       { id: uid('m'), key: 'owner', value: 'web-data team' },
     ],
   });
-  const buffer = node('buffer', 'Stream', 'Event Buffer', 'Kafka', 16, 0, {
+  const buffer = node('buffer', 'Stream', 'Event Buffer', 'Kafka', 10, 0, {
     inputs: [enriched.id],
     outputs: [enriched.id],
     description: 'Decouples enrichment from downstream processing.',
     metadata: [{ id: uid('m'), key: 'retention', value: '7 days' }],
   });
-  const validate = node('machine', 'Validator', 'Validation Machine', 'Stream processor', 26, 0, {
+  const validate = node('machine', 'Validator', 'Validation Machine', 'Stream processor', 15, 0, {
+    size: 2,
     inputs: [enriched.id],
     outputs: [valid.id, invalid.id],
     description: 'Drops bots and malformed visits.',
   });
-  const aggregate = node('machine', 'Aggregator', 'Aggregation Machine', 'Flink', 34, 0, {
+  const aggregate = node('machine', 'Aggregator', 'Aggregation Machine', 'Flink', 20, 0, {
     inputs: [valid.id],
     outputs: [summary.id],
     description: 'Rolls visits up into hourly summaries.',
   });
-  const store = node('store', 'Warehouse', 'Analytics Store', 'Snowflake', 42, 0, {
+  const store = node('store', 'Warehouse', 'Analytics Store', 'Snowflake', 25, 0, {
     inputs: [summary.id],
     description: 'Serves dashboards and ad-hoc analysis.',
   });
-  const dead = node('store', 'Object Storage', 'Rejected Visits', 'S3 bucket', 34, 8, {
+  const dead = node('store', 'Object Storage', 'Rejected Visits', 'S3 bucket', 20, 5, {
     inputs: [invalid.id],
     description: 'Kept for debugging the tracker.',
   });
@@ -293,11 +295,12 @@ export function examplePipeline(): Pipeline {
     tiles[0].itemId = itemId;
     p.belts.push(...tiles);
   };
-  lay(visit.id, [3, 1], [7, 1]);
-  lay(enriched.id, [11, 1], [15, 1]);
-  lay(enriched.id, [21, 1], [25, 1]);
-  lay(valid.id, [29, 1], [33, 1]);
-  lay(summary.id, [37, 1], [41, 1]);
-  lay(invalid.id, [29, 2], [31, 2], [31, 9], [33, 9]);
+  lay(visit.id, [1, 0], [4, 0]);
+  lay(enriched.id, [6, 0], [9, 0]);
+  lay(enriched.id, [11, 0], [14, 0]);
+  // The validator is two blocks wide: one output port per result.
+  lay(valid.id, [16, 0], [19, 0]);
+  lay(invalid.id, [16, 1], [17, 1], [17, 5], [19, 5]);
+  lay(summary.id, [21, 0], [24, 0]);
   return p;
 }

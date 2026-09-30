@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { shade } from '../lib/color';
 import { KIND_META } from '../model/defaults';
 import { CELL } from '../model/geometry';
-import type { ItemType, NodeKind } from '../model/types';
+import type { Dir, ItemType, NodeKind } from '../model/types';
 import { ItemGlyph } from './ItemGlyph';
 
 function gearPath(outer: number, inner: number, teeth: number): string {
@@ -25,104 +25,99 @@ function gearPath(outer: number, inner: number, teeth: number): string {
   return `${d} Z`;
 }
 
-const GEAR = gearPath(17, 13, 9);
+const GEAR = gearPath(9.5, 7, 8);
+
+/** A small dark tab on the block edge with an arrow showing flow direction. */
+function PortTab({ x, y }: { x: number; y: number }) {
+  return (
+    <g className="port-tab" transform={`translate(${x} ${y})`}>
+      <rect x={-3.5} y={-6.5} width={7} height={13} rx={2} />
+      <path d="M -1.5 -3 L 2 0 L -1.5 3 Z" />
+    </g>
+  );
+}
+
+/** The kind's symbol, drawn upright around (0, 0). */
+function KindSymbol({ kind, color, queue }: { kind: NodeKind; color: string; queue: ItemType[] }) {
+  const dark = shade(color, -0.3);
+  const light = shade(color, 0.45);
+  switch (kind) {
+    case 'source':
+      return (
+        <g>
+          <circle r={8.5} fill={color} className="body" />
+          <circle className="pulse" r={8.5} stroke={dark} />
+          <circle r={3.5} fill="#fff" className="body" />
+        </g>
+      );
+    case 'machine':
+      return (
+        <g className="spin">
+          <path d={GEAR} fill="#fff" className="body" />
+          <circle r={3} fill={dark} className="body" />
+        </g>
+      );
+    case 'buffer':
+      return (
+        <g>
+          <rect x={-11} y={-6.5} width={22} height={13} rx={6.5} fill="#fff" className="body" />
+          {[-5.5, 0, 5.5].map((x, i) => {
+            const item = queue.length ? queue[i % queue.length] : null;
+            return (
+              <g key={i} className="slot" style={{ animationDelay: `${i * 0.25}s` }} transform={`translate(${x} 0)`}>
+                {item ? <ItemGlyph shape={item.shape} color={item.color} r={2.6} strokeWidth={1} /> : <circle r={2} fill={dark} />}
+              </g>
+            );
+          })}
+        </g>
+      );
+    case 'store':
+      return (
+        <g className="body" fill="#fff">
+          <path d="M -9 -6 L -9 6 A 9 3.2 0 0 0 9 6 L 9 -6" />
+          <path d="M -9 0 A 9 3.2 0 0 0 9 0" fill="none" />
+          <ellipse cx={0} cy={-6} rx={9} ry={3.2} fill={light} />
+        </g>
+      );
+  }
+}
 
 interface Props {
   kind: NodeKind;
-  /** Unrotated size in px: items enter on the left and leave on the right. */
-  w: number;
-  h: number;
+  /** Blocks in the row. */
+  size?: number;
+  rotation?: Dir;
   color: string;
   /** Items shown queued inside a buffer. */
   queue?: ItemType[];
   ports?: boolean;
 }
 
-/** A small dark tab on the building edge with an arrow showing flow direction. */
-function PortTab({ x, y }: { x: number; y: number }) {
-  return (
-    <g className="port-tab" transform={`translate(${x} ${y})`}>
-      <rect x={-5} y={-8} width={10} height={16} rx={3} />
-      <path d="M -2 -3.5 L 2 0 L -2 3.5 Z" />
-    </g>
-  );
-}
-
 /**
- * The flat, outlined building drawn for each component kind, in local
- * coordinates (0,0)–(w,h) flowing left → right; the caller rotates it.
+ * A building: `size` 1×1 blocks joined into one plate, drawn flowing
+ * left → right and rotated into place. The symbol always stays upright.
  */
-export const BuildingArt = memo(function BuildingArt({ kind, w, h, color, queue = [], ports = true }: Props) {
-  const dark = shade(color, -0.3);
-  const light = shade(color, 0.45);
-  const cx = w / 2;
-  const cy = h / 2;
-  const inset = 7;
-  const rows = Math.round(h / CELL);
+export const BuildingArt = memo(function BuildingArt({ kind, size = 1, rotation = 0, color, queue = [], ports = true }: Props) {
+  const W = CELL;
+  const H = CELL * size;
   const meta = KIND_META[kind];
+  const inset = 5;
+  const bodyR = kind === 'buffer' ? Math.min(W, H) / 2 - inset : 5;
 
   return (
-    <g className={`art art-${kind}`}>
+    <g className={`art art-${kind}`} transform={`rotate(${rotation * 90}) translate(${-W / 2} ${-H / 2})`}>
       {ports &&
-        Array.from({ length: rows }, (_, i) => (
+        Array.from({ length: size }, (_, i) => (
           <g key={i}>
-            {meta.hasInput && <PortTab x={1} y={(i + 0.5) * CELL} />}
-            {meta.hasOutput && <PortTab x={w - 1} y={(i + 0.5) * CELL} />}
+            {meta.hasInput && <PortTab x={1.5} y={(i + 0.5) * CELL} />}
+            {meta.hasOutput && <PortTab x={W - 1.5} y={(i + 0.5) * CELL} />}
           </g>
         ))}
-      <rect className="plate" x={3} y={3} width={w - 6} height={h - 6} rx={9} />
-      {kind === 'source' && (
-        <g>
-          <rect x={inset + 3} y={inset + 3} width={w - inset * 2 - 6} height={h - inset * 2 - 6} rx={6} fill={light} className="body" />
-          <circle cx={cx} cy={cy} r={20} fill={color} className="body" />
-          <circle className="pulse" cx={cx} cy={cy} r={20} stroke={dark} />
-          <circle cx={cx} cy={cy} r={8} fill="#fff" className="body" />
-        </g>
-      )}
-      {kind === 'machine' && (
-        <g>
-          <rect x={inset + 3} y={inset + 3} width={w - inset * 2 - 6} height={h - inset * 2 - 6} rx={6} fill={color} className="body" />
-          <g transform={`translate(${cx} ${cy})`}>
-            <g className="spin">
-              <path d={GEAR} fill="#fff" className="body" />
-              <circle r={5.5} fill={dark} className="body" />
-            </g>
-          </g>
-        </g>
-      )}
-      {kind === 'buffer' && (
-        <g>
-          <rect x={inset + 3} y={inset + 5} width={w - inset * 2 - 6} height={h - inset * 2 - 10} rx={(h - inset * 2 - 10) / 2} fill={color} className="body" />
-          {[0, 1, 2, 3].map((i) => {
-            const slotW = 22;
-            const gap = 6;
-            const total = slotW * 4 + gap * 3;
-            const x = cx - total / 2 + i * (slotW + gap);
-            const item = queue.length ? queue[i % queue.length] : null;
-            return (
-              <g key={i} className="slot" style={{ animationDelay: `${i * 0.25}s` }}>
-                <rect x={x} y={cy - 11} width={slotW} height={22} rx={5} fill="#fff" opacity={0.9} stroke={dark} strokeWidth={1.5} />
-                {item && (
-                  <g transform={`translate(${x + slotW / 2} ${cy})`}>
-                    <ItemGlyph shape={item.shape} color={item.color} r={6} />
-                  </g>
-                )}
-              </g>
-            );
-          })}
-        </g>
-      )}
-      {kind === 'store' && (
-        <g>
-          <rect x={inset + 3} y={inset + 3} width={w - inset * 2 - 6} height={h - inset * 2 - 6} rx={6} fill={color} className="body" />
-          <g className="body" fill="#fff">
-            <path d={`M ${cx - 20} ${cy - 14} L ${cx - 20} ${cy + 14} A 20 6.5 0 0 0 ${cx + 20} ${cy + 14} L ${cx + 20} ${cy - 14}`} />
-            <path d={`M ${cx - 20} ${cy - 4} A 20 6.5 0 0 0 ${cx + 20} ${cy - 4}`} fill="none" />
-            <path d={`M ${cx - 20} ${cy + 5} A 20 6.5 0 0 0 ${cx + 20} ${cy + 5}`} fill="none" />
-            <ellipse cx={cx} cy={cy - 14} rx={20} ry={6.5} fill={light} />
-          </g>
-        </g>
-      )}
+      <rect className="plate" x={2.5} y={2.5} width={W - 5} height={H - 5} rx={7} />
+      <rect className="body" x={inset + 2} y={inset + 2} width={W - inset * 2 - 4} height={H - inset * 2 - 4} rx={bodyR} fill={kind === 'source' ? shade(color, 0.45) : color} />
+      <g transform={`translate(${W / 2} ${H / 2}) rotate(${-rotation * 90})`}>
+        <KindSymbol kind={kind} color={color} queue={queue} />
+      </g>
     </g>
   );
 });

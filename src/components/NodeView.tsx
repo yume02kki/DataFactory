@@ -1,22 +1,19 @@
 import { memo } from 'react';
 import { KIND_META } from '../model/defaults';
-import { CELL, KIND_SIZE, nodeRect } from '../model/geometry';
+import { CELL, footprint, nodeRect } from '../model/geometry';
 import type { Dir, FactoryNode, ItemType, NodeKind } from '../model/types';
 import { textWidth, truncate } from '../lib/text';
 import { BuildingArt } from './BuildingArt';
 
-const NAME_FONT = '700 13px Inter, system-ui, sans-serif';
-const META_FONT = '600 11px Inter, system-ui, sans-serif';
+const NAME_FONT = '700 12px Inter, system-ui, sans-serif';
+const META_FONT = '600 10px Inter, system-ui, sans-serif';
 
-/** Building art rotated into its footprint at (x, y) in world pixels. */
-export function RotatedArt({ kind, rotation, color, queue, x, y }: { kind: NodeKind; rotation: Dir; color: string; queue?: ItemType[]; x: number; y: number }) {
-  const W = KIND_SIZE[kind].w * CELL;
-  const H = KIND_SIZE[kind].h * CELL;
-  const fw = rotation % 2 === 0 ? W : H;
-  const fh = rotation % 2 === 0 ? H : W;
+/** Building art rotated into its footprint, whose top-left is (x, y) in world pixels. */
+export function RotatedArt({ kind, rotation, size, color, queue, x, y }: { kind: NodeKind; rotation: Dir; size: number; color: string; queue?: ItemType[]; x: number; y: number }) {
+  const f = footprint(rotation, size);
   return (
-    <g transform={`translate(${x + fw / 2} ${y + fh / 2}) rotate(${rotation * 90}) translate(${-W / 2} ${-H / 2})`}>
-      <BuildingArt kind={kind} w={W} h={H} color={color} queue={queue} />
+    <g transform={`translate(${x + (f.w * CELL) / 2} ${y + (f.h * CELL) / 2})`}>
+      <BuildingArt kind={kind} size={size} rotation={rotation} color={color} queue={queue} />
     </g>
   );
 }
@@ -45,14 +42,14 @@ export const NodeView = memo(function NodeView({ node, items, selected, dimmed }
 
   return (
     <g className={`node node-${node.kind}${selected ? ' selected' : ''}${dimmed ? ' dimmed' : ''}`} data-node-id={node.id}>
-      {selected && <rect className="select-ring" x={r.x - 5} y={r.y - 5} width={r.w + 10} height={r.h + 10} rx={12} />}
-      <RotatedArt kind={node.kind} rotation={node.rotation} color={node.color} queue={queue} x={r.x} y={r.y} />
-      <g className="labels" transform={`translate(${r.x + r.w / 2} ${r.y + r.h + 19})`}>
+      {selected && <rect className="select-ring" x={r.x - 3} y={r.y - 3} width={r.w + 6} height={r.h + 6} rx={9} />}
+      <RotatedArt kind={node.kind} rotation={node.rotation} size={node.size} color={node.color} queue={queue} x={r.x} y={r.y} />
+      <g className="labels" transform={`translate(${r.x + r.w / 2} ${r.y + r.h + 15})`}>
         <text className="node-name" x={0} y={0} textAnchor="middle" style={{ font: NAME_FONT }}>
           {name}
         </text>
         {(type || tech) && (
-          <g transform={`translate(${-lineW / 2} 17)`}>
+          <g transform={`translate(${-lineW / 2} 15)`}>
             {type && (
               <text className="node-type" x={0} y={0} style={{ font: META_FONT }}>
                 {type}
@@ -60,7 +57,7 @@ export const NodeView = memo(function NodeView({ node, items, selected, dimmed }
             )}
             {tech && (
               <g transform={`translate(${typeW + gap} 0)`}>
-                <rect className="tech-pill" x={0} y={-12} width={techW} height={17} rx={8.5} />
+                <rect className="tech-pill" x={0} y={-11} width={techW} height={15} rx={7.5} />
                 <text className="tech-text" x={7} y={0} style={{ font: META_FONT }}>
                   {tech}
                 </text>

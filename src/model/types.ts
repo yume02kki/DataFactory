@@ -59,6 +59,11 @@ export interface FactoryNode {
   y: number;
   /** Direction items flow through the building: in at the back, out at the front. */
   rotation: Dir;
+  /**
+   * Number of 1×1 blocks side by side, across the flow. Blocks placed next to
+   * each other merge into one wide block with one port per block on each side.
+   */
+  size: number;
   /** Item type ids this component consumes. */
   inputs: string[];
   /** Item type ids this component produces. */

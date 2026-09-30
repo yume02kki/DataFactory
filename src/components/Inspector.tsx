@@ -198,7 +198,7 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
 
   return (
     <div className="insp-body">
-      <Header icon={<KindIcon kind={node.kind} color={node.color} size={40} />} eyebrow={meta.label} title={node.name || meta.label} />
+      <Header icon={<KindIcon kind={node.kind} color={node.color} size={40} />} eyebrow={node.size > 1 ? `${meta.label} · ${node.size} blocks wide · ${node.size} ports per side` : meta.label} title={node.name || meta.label} />
 
       <Field label="Name">
         <input value={node.name} onChange={(e) => set('name', e.target.value)} placeholder={`e.g. ${meta.label} name`} />

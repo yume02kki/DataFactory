@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { blankPipeline, examplePipeline, makeItem, makeNode } from './defaults';
-import { footprint, lPath, nodeCells } from './geometry';
+import { footprint, lPath, nodeCells, outputCells } from './geometry';
 import * as ops from './ops';
 import { normalizePipeline } from './storage';
 import type { Dir } from './types';
 
-/** source (0..2) → belt (3..5) → machine (6..8) → belt (9..11) → store (12..14), all on row 1. */
+/** source (0) → belt (1..3) → machine (4) → belt (5..7) → store (8), all on row 0. */
 function tinyFactory() {
   const p = blankPipeline();
   const visit = makeItem({ name: 'Visit' });
   const src = makeNode('source', 0, 0);
-  const mac = makeNode('machine', 6, 0);
-  const sto = makeNode('store', 12, 0);
+  const mac = makeNode('machine', 4, 0);
+  const sto = makeNode('store', 8, 0);
   src.outputs.push(visit.id);
   p.items.push(visit);
   p.nodes.push(src, mac, sto);
@@ -36,10 +36,10 @@ describe('laying belts', () => {
 
   it('never paints over buildings and redirects existing tiles', () => {
     const { p } = tinyFactory();
-    ops.paintBelt(p, row(4, 7, 1));
-    expect(p.belts.map((t) => t.x)).toEqual([4, 5]);
-    ops.paintBelt(p, [{ x: 4, y: 1, dir: 1 }]);
-    expect(p.belts).toHaveLength(2);
+    ops.paintBelt(p, row(2, 5, 0));
+    expect(p.belts.map((t) => t.x)).toEqual([2, 3, 5]);
+    ops.paintBelt(p, [{ x: 2, y: 0, dir: 1 }]);
+    expect(p.belts).toHaveLength(3);
     expect(p.belts[0].dir).toBe(1);
   });
 });
@@ -47,7 +47,7 @@ describe('laying belts', () => {
 describe('tracing belt lines', () => {
   it('connects a building output to the next building input', () => {
     const { p, src, mac, visit } = tinyFactory();
-    ops.paintBelt(p, row(3, 5, 1));
+    ops.paintBelt(p, row(1, 3, 0));
     const [link] = ops.traceLinks(p);
     expect(link).toMatchObject({ from: src.id, to: mac.id, itemId: visit.id, explicit: false });
     expect(link.tiles).toHaveLength(3);
@@ -55,8 +55,8 @@ describe('tracing belt lines', () => {
 
   it('leaves the end open when the belt misses the input side', () => {
     const { p, mac } = tinyFactory();
-    ops.paintBelt(p, row(3, 4, 1));
-    ops.paintBelt(p, [{ x: 5, y: 1, dir: 1 }]);
+    ops.paintBelt(p, row(1, 2, 0));
+    ops.paintBelt(p, [{ x: 3, y: 0, dir: 1 }]);
     const [link] = ops.traceLinks(p);
     expect(link.to).toBeNull();
     expect(link.to).not.toBe(mac.id);
@@ -64,21 +64,21 @@ describe('tracing belt lines', () => {
 
   it('respects building rotation', () => {
     const { p, mac } = tinyFactory();
-    ops.paintBelt(p, row(3, 5, 1));
+    ops.paintBelt(p, row(1, 3, 0));
     mac.rotation = 2; // now faces left: its input is on the right
     expect(ops.traceLinks(p)[0].to).toBeNull();
   });
 
   it('ignores belts pointing back into the source and handles loops', () => {
     const { p } = tinyFactory();
-    ops.paintBelt(p, [{ x: 3, y: 1, dir: 2 }]);
+    ops.paintBelt(p, [{ x: 1, y: 0, dir: 2 }]);
     expect(ops.traceLinks(p)).toHaveLength(0);
     const q = tinyFactory().p;
     ops.paintBelt(q, [
-      { x: 3, y: 0, dir: 0 },
-      { x: 4, y: 0, dir: 1 },
-      { x: 4, y: 1, dir: 2 },
-      { x: 3, y: 1, dir: 3 },
+      { x: 1, y: 0, dir: 0 },
+      { x: 2, y: 0, dir: 1 },
+      { x: 2, y: 1, dir: 2 },
+      { x: 1, y: 1, dir: 3 },
     ]);
     expect(ops.traceLinks(q)[0].tiles).toHaveLength(4);
   });
@@ -86,9 +86,9 @@ describe('tracing belt lines', () => {
   it('draws side-fed tiles as curves', () => {
     const { p } = tinyFactory();
     ops.paintBelt(p, [
-      { x: 3, y: 1, dir: 0 },
-      { x: 4, y: 1, dir: 1 },
-      { x: 4, y: 2, dir: 1 },
+      { x: 1, y: 0, dir: 0 },
+      { x: 2, y: 0, dir: 1 },
+      { x: 2, y: 1, dir: 1 },
     ]);
     const inflow = ops.tileInflow(p);
     const [a, b, c] = p.belts;
@@ -101,7 +101,7 @@ describe('tracing belt lines', () => {
     const { p, mac, sto } = tinyFactory();
     const order = makeItem({ name: 'Order' });
     p.items.push(order);
-    ops.paintBelt(p, row(9, 11, 1));
+    ops.paintBelt(p, row(5, 7, 0));
     ops.setLinkItem(p, p.belts[1].id, order.id);
     expect(p.belts[0].itemId).toBe(order.id);
     expect(mac.outputs).toContain(order.id);
@@ -110,58 +110,57 @@ describe('tracing belt lines', () => {
 });
 
 describe('editing the floor', () => {
-  it('only places buildings on free cells', () => {
+  it('only places blocks on free cells', () => {
     const { p } = tinyFactory();
-    expect(ops.canPlaceNode(p, 'machine', 1, 1, 0)).toBe(false);
-    expect(ops.canPlaceNode(p, 'machine', 0, 4, 0)).toBe(true);
-    ops.paintBelt(p, [{ x: 1, y: 5, dir: 0 }]);
-    expect(ops.canPlaceNode(p, 'machine', 0, 4, 0)).toBe(false);
+    expect(ops.canPlaceNode(p, 0, 0, 0)).toBe(false);
+    expect(ops.canPlaceNode(p, 0, 4, 0)).toBe(true);
+    ops.paintBelt(p, [{ x: 0, y: 4, dir: 0 }]);
+    expect(ops.canPlaceNode(p, 0, 4, 0)).toBe(false);
   });
 
-  it('right-click erase removes tiles first, then buildings', () => {
+  it('right-click erase removes tiles and blocks', () => {
     const { p, mac } = tinyFactory();
-    ops.paintBelt(p, row(3, 5, 1));
-    expect(ops.eraseCell(p, 4, 1)).toBe('tile');
-    expect(ops.eraseCell(p, 7, 2)).toBe('node');
+    ops.paintBelt(p, row(1, 3, 0));
+    expect(ops.eraseCell(p, 2, 0)).toBe('tile');
+    expect(ops.eraseCell(p, 4, 0)).toBe('node');
     expect(p.nodes.find((n) => n.id === mac.id)).toBeUndefined();
     expect(ops.eraseCell(p, 40, 40)).toBeNull();
   });
 
-  it('rotates buildings around their centre and swaps their footprint', () => {
+  it('rotates a wide block around its centre and swaps its footprint', () => {
     const p = blankPipeline();
-    const buf = makeNode('buffer', 0, 0);
-    p.nodes.push(buf);
-    expect(ops.rotateNodes(p, [buf.id], 1)).toBe(1);
-    expect(buf.rotation).toBe(1);
-    expect(footprint(buf.kind, buf.rotation)).toEqual({ w: 3, h: 5 });
-    expect(nodeCells(buf)).toContainEqual({ x: 2, y: 1 }); // the old centre cell stays covered
+    const wide = { ...makeNode('buffer', 0, 0), size: 3 }; // cells (0,0) (0,1) (0,2)
+    p.nodes.push(wide);
+    expect(ops.rotateNodes(p, [wide.id], 1)).toBe(1);
+    expect(wide.rotation).toBe(1);
+    expect(footprint(wide.rotation, wide.size)).toEqual({ w: 3, h: 1 });
+    expect(nodeCells(wide)).toContainEqual({ x: 0, y: 1 }); // the old centre cell stays covered
   });
 
   it('refuses to rotate into something else', () => {
     const p = blankPipeline();
-    const buf = makeNode('buffer', 0, 0);
-    p.nodes.push(buf);
-    ops.paintBelt(p, [{ x: 2, y: 3, dir: 0 }]);
-    expect(ops.rotateNodes(p, [buf.id], 1)).toBe(0);
-    expect(buf.rotation).toBe(0);
+    const wide = { ...makeNode('buffer', 1, 0), size: 3 };
+    p.nodes.push(wide);
+    ops.paintBelt(p, [{ x: 0, y: 1, dir: 0 }]);
+    expect(ops.rotateNodes(p, [wide.id], 1)).toBe(0);
+    expect(wide.rotation).toBe(0);
   });
 
   it('moves a selection only onto free cells', () => {
     const { p, src, mac } = tinyFactory();
     expect(ops.canMove(p, [src.id], [], 4, 0)).toBe(false); // would land on the machine
-    expect(ops.canMove(p, [src.id, mac.id], [], 3, 0)).toBe(true);
+    expect(ops.canMove(p, [src.id, mac.id], [], 2, 0)).toBe(true);
   });
 
   it('duplicates buildings and belts into free space', () => {
     const { p, src, mac } = tinyFactory();
-    ops.paintBelt(p, row(3, 5, 1));
+    ops.paintBelt(p, row(1, 3, 0));
     const tileIds = p.belts.map((t) => t.id);
     const off = ops.freeOffset(p, [src.id, mac.id], tileIds);
     const ids = ops.duplicate(p, [src.id, mac.id], tileIds, off.dx, off.dy);
     expect(ids.nodes).toHaveLength(2);
     expect(ids.tiles).toHaveLength(3);
-    const links = ops.traceLinks(p);
-    expect(links.filter((l) => l.to)).toHaveLength(2);
+    expect(ops.traceLinks(p).filter((l) => l.to)).toHaveLength(2);
     const copy = p.nodes.find((n) => n.id === ids.nodes[0])!;
     copy.outputs.push('x');
     expect(src.outputs).not.toContain('x');
@@ -169,11 +168,65 @@ describe('editing the floor', () => {
 
   it('removing an item clears it everywhere', () => {
     const { p, src, visit } = tinyFactory();
-    ops.paintBelt(p, row(3, 5, 1));
+    ops.paintBelt(p, row(1, 3, 0));
     ops.setLinkItem(p, p.belts[0].id, visit.id);
     ops.removeItem(p, visit.id);
     expect(src.outputs).toHaveLength(0);
     expect(p.belts[0].itemId).toBeNull();
+  });
+});
+
+describe('wide blocks', () => {
+  const block = (x: number, y: number, rotation: Dir = 0, kind: 'machine' | 'store' = 'machine') => ({ ...makeNode(kind, x, y), rotation });
+
+  it('joins blocks placed side by side across the flow', () => {
+    const p = blankPipeline();
+    const a = ops.placeBlock(p, block(0, 0));
+    expect(ops.placeBlock(p, block(0, 1))).toBe(a);
+    expect(ops.placeBlock(p, block(0, -1))).toBe(a);
+    expect(p.nodes).toHaveLength(1);
+    expect(p.nodes[0]).toMatchObject({ x: 0, y: -1, size: 3 });
+    expect(outputCells(p.nodes[0])).toHaveLength(3); // one port per block
+  });
+
+  it('keeps blocks separate along the flow, across kinds, types and facings', () => {
+    const p = blankPipeline();
+    ops.placeBlock(p, block(0, 0));
+    ops.placeBlock(p, block(1, 0)); // in front: separate
+    ops.placeBlock(p, block(0, 1, 0, 'store')); // other kind
+    ops.placeBlock(p, block(0, -1, 2)); // other facing
+    ops.placeBlock(p, { ...block(0, 2), type: 'Validator' }); // not adjacent to a machine row end
+    expect(p.nodes).toHaveLength(5);
+  });
+
+  it('bridges two rows into one', () => {
+    const p = blankPipeline();
+    const a = ops.placeBlock(p, block(3, 0, 1));
+    ops.placeBlock(p, { ...block(5, 0, 1), outputs: ['x'] });
+    expect(p.nodes).toHaveLength(2);
+    expect(ops.placeBlock(p, block(4, 0, 1))).toBe(a);
+    expect(p.nodes).toHaveLength(1);
+    expect(p.nodes[0]).toMatchObject({ x: 3, size: 3, outputs: ['x'] });
+  });
+
+  it('erasing the middle block splits the row', () => {
+    const p = blankPipeline();
+    const wide = { ...makeNode('machine', 0, 0), size: 4, name: 'Validator' };
+    p.nodes.push(wide);
+    ops.eraseCell(p, 0, 1);
+    expect(p.nodes.map((n) => [n.y, n.size, n.name])).toEqual([
+      [0, 1, 'Validator'],
+      [2, 2, 'Validator 2'],
+    ]);
+    ops.eraseCell(p, 0, 2);
+    expect(p.nodes[1]).toMatchObject({ y: 3, size: 1 });
+  });
+
+  it('blocks touching front-to-back hand items over directly', () => {
+    const { p, src, mac, visit } = tinyFactory();
+    src.x = 3; // right behind the machine
+    const [link] = ops.traceLinks(p);
+    expect(link).toMatchObject({ from: src.id, to: mac.id, itemId: visit.id, tiles: [] });
   });
 });
 
@@ -227,7 +280,7 @@ describe('the example and files', () => {
     });
     expect(p.items[0].shape).toBe('circle');
     expect(p.nodes).toHaveLength(1);
-    expect(p.nodes[0]).toMatchObject({ x: 1, rotation: 0, outputs: ['i1'], inputs: [] });
+    expect(p.nodes[0]).toMatchObject({ x: 1, rotation: 0, size: 1, outputs: ['i1'], inputs: [] });
     expect(p.belts).toHaveLength(1);
     expect(p.belts[0].dir).toBe(0);
   });

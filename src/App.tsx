@@ -36,7 +36,7 @@ function bootstrap() {
 export default function App() {
   const [saved, setSaved] = useState(true);
   const [help, setHelp] = useState(false);
-  const empty = useFactory((s) => s.pipeline.nodes.length === 0);
+  const empty = useFactory((s) => s.pipeline.nodes.length === 0 && s.pipeline.belts.length === 0 && !s.tool);
   const toast = useFactory((s) => s.toast);
 
   useEffect(() => {

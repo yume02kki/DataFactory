@@ -58,7 +58,7 @@ export const BeltTiles = memo(function BeltTiles({ tiles, inflow, className = ''
       </g>
       <g className="belt-chevrons">
         {paths.map(({ t }) => (
-          <path key={t.id} className={cls(t)} transform={chevron(t.x, t.y, t.dir)} d="M -3 -6 L 4 0 L -3 6 Z" />
+          <path key={t.id} className={cls(t)} transform={chevron(t.x, t.y, t.dir)} d="M -3 -5.5 L 4 0 L -3 5.5 Z" />
         ))}
       </g>
     </g>
@@ -80,11 +80,13 @@ export const LinkItems = memo(
       return { d, length: polylineLength(link.points), mid: polylineMidpoint(link.points), end: link.points[link.points.length - 1] };
     }, [link.points]);
 
+    // Blocks handing items straight to each other have nothing to animate.
+    if (geo.length < 1) return null;
     const count = Math.max(1, Math.floor(geo.length / ITEM_SPACING));
     const dur = Math.max(0.5, geo.length / BELT_SPEED);
     const label = item ? truncate(item.name, 20) : null;
     const labelW = label ? textWidth(label, LABEL_FONT) + 30 : 0;
-    const labelPos: Pt = geo.mid.horizontal ? { x: geo.mid.p.x - labelW / 2, y: geo.mid.p.y - 36 } : { x: geo.mid.p.x + 20, y: geo.mid.p.y - 10 };
+    const labelPos: Pt = geo.mid.horizontal ? { x: geo.mid.p.x - labelW / 2, y: geo.mid.p.y - 32 } : { x: geo.mid.p.x + 20, y: geo.mid.p.y - 10 };
 
     return (
       <g className={`link${dimmed ? ' dimmed' : ''}`}>
@@ -98,7 +100,7 @@ export const LinkItems = memo(
                 path={geo.d}
                 calcMode="linear"
               />
-              {item ? <ItemGlyph shape={item.shape} color={item.color} r={7.5} /> : <circle className="blank-item" r={4.5} />}
+              {item ? <ItemGlyph shape={item.shape} color={item.color} r={7} /> : <circle className="blank-item" r={4} />}
             </g>
           ))}
         </g>

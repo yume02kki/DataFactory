@@ -134,6 +134,7 @@ export function normalizePipeline(input: unknown): Pipeline {
         x: Math.round(num(o.x)),
         y: Math.round(num(o.y)),
         rotation: ([0, 1, 2, 3].includes(o.rotation as number) ? o.rotation : 0) as Dir,
+        size: Math.max(1, Math.min(64, Math.round(num(o.size, 1)))),
         inputs: KIND_META[kind].hasInput ? ids(o.inputs) : [],
         outputs: KIND_META[kind].hasOutput ? ids(o.outputs) : [],
         metadata: arr(o.metadata).map((m) => {

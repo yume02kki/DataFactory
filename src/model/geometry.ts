@@ -1,15 +1,7 @@
-import type { Dir, FactoryNode, NodeKind } from './types';
+import type { Dir, FactoryNode } from './types';
 
-/** Size of one grid cell in world pixels. */
-export const CELL = 32;
-
-/** Footprint of each building in grid cells, unrotated (flowing to the right). */
-export const KIND_SIZE: Record<NodeKind, { w: number; h: number }> = {
-  source: { w: 3, h: 3 },
-  machine: { w: 3, h: 3 },
-  buffer: { w: 5, h: 3 },
-  store: { w: 3, h: 3 },
-};
+/** Size of one grid cell in world pixels. Buildings and belt tiles are one cell each. */
+export const CELL = 40;
 
 /** Unit vectors for each direction. */
 export const DV: ReadonlyArray<readonly [number, number]> = [
@@ -36,21 +28,25 @@ export interface Rect {
 
 export const cellKey = (x: number, y: number) => `${x},${y}`;
 
-/** Footprint in cells after rotation (vertical buildings swap width and height). */
-export function footprint(kind: NodeKind, rotation: Dir): { w: number; h: number } {
-  const s = KIND_SIZE[kind];
-  return rotation % 2 === 0 ? { w: s.w, h: s.h } : { w: s.h, h: s.w };
+/** Unit step along a building's row of blocks (across the flow direction). */
+export function lineAxis(rotation: Dir): readonly [number, number] {
+  return rotation % 2 === 0 ? [0, 1] : [1, 0];
 }
 
-type Placed = Pick<FactoryNode, 'kind' | 'x' | 'y' | 'rotation'>;
+/** Footprint in cells: `size` blocks in a row across the flow. */
+export function footprint(rotation: Dir, size = 1): { w: number; h: number } {
+  return rotation % 2 === 0 ? { w: 1, h: size } : { w: size, h: 1 };
+}
+
+type Placed = Pick<FactoryNode, 'x' | 'y' | 'rotation' | 'size'>;
 
 export function nodeRect(node: Placed): Rect {
-  const f = footprint(node.kind, node.rotation);
+  const f = footprint(node.rotation, node.size);
   return { x: node.x * CELL, y: node.y * CELL, w: f.w * CELL, h: f.h * CELL };
 }
 
 export function nodeCells(node: Placed): Pt[] {
-  const f = footprint(node.kind, node.rotation);
+  const f = footprint(node.rotation, node.size);
   const cells: Pt[] = [];
   for (let dy = 0; dy < f.h; dy++) for (let dx = 0; dx < f.w; dx++) cells.push({ x: node.x + dx, y: node.y + dy });
   return cells;
@@ -58,7 +54,7 @@ export function nodeCells(node: Placed): Pt[] {
 
 /** The cells just outside the face of a building that points in `side`. */
 export function faceCells(node: Placed, side: Dir): Pt[] {
-  const f = footprint(node.kind, node.rotation);
+  const f = footprint(node.rotation, node.size);
   const cells: Pt[] = [];
   if (side === 0) for (let i = 0; i < f.h; i++) cells.push({ x: node.x + f.w, y: node.y + i });
   if (side === 2) for (let i = 0; i < f.h; i++) cells.push({ x: node.x - 1, y: node.y + i });
@@ -74,9 +70,9 @@ export const inputCells = (node: Placed) => faceCells(node, opposite(node.rotati
 
 export const cellCenter = (x: number, y: number): Pt => ({ x: (x + 0.5) * CELL, y: (y + 0.5) * CELL });
 
-/** Top-left cell for a building of `kind` centred on the cell under the cursor. */
-export function anchorFor(kind: NodeKind, rotation: Dir, cell: Pt): Pt {
-  const f = footprint(kind, rotation);
+/** Top-left cell for a building row of `size` centred on `cell`. */
+export function anchorFor(rotation: Dir, size: number, cell: Pt): Pt {
+  const f = footprint(rotation, size);
   return { x: cell.x - Math.floor(f.w / 2), y: cell.y - Math.floor(f.h / 2) };
 }
 

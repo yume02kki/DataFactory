@@ -6,6 +6,7 @@ import {
   cellCenter,
   cellKey,
   footprint,
+  lineAxis,
   nodeCells,
   opposite,
   outputCells,
@@ -13,7 +14,7 @@ import {
   type Pt,
 } from './geometry';
 import { uid } from './ids';
-import type { BeltTile, Dir, FactoryNode, NodeKind, Pipeline } from './types';
+import type { BeltTile, Dir, FactoryNode, Pipeline } from './types';
 
 /**
  * Pure (draft-mutating) grid operations shared by the store, canvas and tests.
@@ -32,15 +33,60 @@ export function occupancy(p: Pipeline): Map<string, Occupant> {
   return map;
 }
 
-/** True when a building fits at (x, y) without covering anything except ignored ids. */
-export function canPlaceNode(p: Pipeline, kind: NodeKind, x: number, y: number, rotation: Dir, ignore: Set<string> = new Set()): boolean {
+/** True when a building row fits at (x, y) without covering anything except ignored ids. */
+export function canPlaceNode(p: Pipeline, x: number, y: number, rotation: Dir, size = 1, ignore: Set<string> = new Set()): boolean {
   const occ = occupancy(p);
-  return nodeCells({ kind, x, y, rotation }).every((c) => {
+  return nodeCells({ x, y, rotation, size }).every((c) => {
     const o = occ.get(cellKey(c.x, c.y));
     if (!o) return true;
     const id = o.node?.id ?? o.tile?.id;
     return !!id && ignore.has(id);
   });
+}
+
+/** Whether two blocks are the same component and may join into one wide block. */
+function sameComponent(a: Pick<FactoryNode, 'kind' | 'rotation' | 'type'>, b: Pick<FactoryNode, 'kind' | 'rotation' | 'type'>) {
+  return a.kind === b.kind && a.rotation === b.rotation && a.type.trim() === b.type.trim();
+}
+
+/**
+ * Places a 1×1 block. If it sits beside the end of a matching block row
+ * (same kind, type and facing, across the flow) it widens that row instead,
+ * joining two rows when it bridges them. Returns the id of the node it became
+ * part of, or null when the cell is taken.
+ */
+export function placeBlock(p: Pipeline, block: FactoryNode): string | null {
+  const { x, y, rotation } = block;
+  if (!canPlaceNode(p, x, y, rotation)) return null;
+  const [ax, ay] = lineAxis(rotation);
+  const before = p.nodes.find((n) => sameComponent(n, block) && n.x + ax * n.size === x && n.y + ay * n.size === y);
+  const after = p.nodes.find((n) => sameComponent(n, block) && n.x === x + ax && n.y === y + ay);
+  if (before) {
+    before.size += 1;
+    if (after) {
+      before.size += after.size;
+      mergeInto(before, after);
+      p.nodes = p.nodes.filter((n) => n.id !== after.id);
+    }
+    return before.id;
+  }
+  if (after) {
+    after.x = x;
+    after.y = y;
+    after.size += 1;
+    return after.id;
+  }
+  p.nodes.push({ ...block, size: 1 });
+  return block.id;
+}
+
+function mergeInto(target: FactoryNode, other: FactoryNode) {
+  for (const id of other.inputs) if (!target.inputs.includes(id)) target.inputs.push(id);
+  for (const id of other.outputs) if (!target.outputs.includes(id)) target.outputs.push(id);
+  const keys = new Set(target.metadata.map((m) => m.key));
+  for (const m of other.metadata) if (!keys.has(m.key)) target.metadata.push(m);
+  if (!target.description && other.description) target.description = other.description;
+  if (!target.technology && other.technology) target.technology = other.technology;
 }
 
 /** Lays belt tiles; existing tiles are redirected, cells covered by buildings are skipped. */
@@ -73,11 +119,36 @@ export function eraseCell(p: Pipeline, x: number, y: number): 'node' | 'tile' | 
     return 'tile';
   }
   const node = p.nodes.find((n) => nodeCells(n).some((c) => c.x === x && c.y === y));
-  if (node) {
+  if (!node) return null;
+  if (node.size <= 1) {
     removeNodes(p, [node.id]);
     return 'node';
   }
-  return null;
+  // Remove one block from a wide building: shrink it, or split it in two.
+  const [ax, ay] = lineAxis(node.rotation);
+  const i = ax ? x - node.x : y - node.y;
+  if (i === 0) {
+    node.x += ax;
+    node.y += ay;
+    node.size -= 1;
+  } else if (i === node.size - 1) {
+    node.size -= 1;
+  } else {
+    const rest: FactoryNode = {
+      ...node,
+      id: uid('node'),
+      name: copyName(p, node.name),
+      x: node.x + ax * (i + 1),
+      y: node.y + ay * (i + 1),
+      size: node.size - i - 1,
+      inputs: [...node.inputs],
+      outputs: [...node.outputs],
+      metadata: node.metadata.map((m) => ({ ...m, id: uid('m') })),
+    };
+    node.size = i;
+    p.nodes.push(rest);
+  }
+  return 'node';
 }
 
 export function removeNodes(p: Pipeline, ids: string[]) {
@@ -131,6 +202,25 @@ export function traceLinks(p: Pipeline): Link[] {
   for (const node of p.nodes) {
     if (!KIND_META[node.kind].hasOutput) continue;
     for (const cell of outputCells(node)) {
+      const direct = occ.get(cellKey(cell.x, cell.y))?.node;
+      if (direct) {
+        // Blocks touching front-to-back hand items over directly, no belt needed.
+        if (direct.id !== node.id && KIND_META[direct.kind].hasInput && direct.rotation === node.rotation) {
+          const c = cellCenter(cell.x, cell.y);
+          const [bx, by] = DV[node.rotation];
+          const edge = { x: c.x - (bx * CELL) / 2, y: c.y - (by * CELL) / 2 };
+          links.push({
+            id: `${node.id}@${cell.x},${cell.y}`,
+            from: node.id,
+            to: direct.id,
+            tiles: [],
+            itemId: guessItem(node, direct),
+            explicit: false,
+            points: [edge, edge],
+          });
+        }
+        continue;
+      }
       const first = occ.get(cellKey(cell.x, cell.y))?.tile;
       // A belt pointing back into the building can't take anything from it.
       if (!first || first.dir === opposite(node.rotation)) continue;
@@ -239,11 +329,11 @@ export function rotateNodes(p: Pipeline, ids: string[], steps: number): number {
   let rotated = 0;
   for (const n of p.nodes) {
     if (!ids.includes(n.id)) continue;
-    const f = footprint(n.kind, n.rotation);
+    const f = footprint(n.rotation, n.size);
     const center = { x: n.x + Math.floor(f.w / 2), y: n.y + Math.floor(f.h / 2) };
     const rotation = rotateDir(n.rotation, steps);
-    const at = anchorFor(n.kind, rotation, center);
-    if (!canPlaceNode(p, n.kind, at.x, at.y, rotation, new Set([n.id]))) continue;
+    const at = anchorFor(rotation, n.size, center);
+    if (!canPlaceNode(p, at.x, at.y, rotation, n.size, new Set([n.id]))) continue;
     n.rotation = rotation;
     n.x = at.x;
     n.y = at.y;
@@ -256,7 +346,7 @@ export function rotateNodes(p: Pipeline, ids: string[], steps: number): number {
 export function freeOffset(p: Pipeline, nodeIds: string[], tileIds: string[]): { dx: number; dy: number } {
   const nodes = p.nodes.filter((n) => nodeIds.includes(n.id));
   const tiles = p.belts.filter((t) => tileIds.includes(t.id));
-  const ys = [...nodes.flatMap((n) => [n.y, n.y + footprint(n.kind, n.rotation).h]), ...tiles.flatMap((t) => [t.y, t.y + 1])];
+  const ys = [...nodes.flatMap((n) => [n.y, n.y + footprint(n.rotation, n.size).h]), ...tiles.flatMap((t) => [t.y, t.y + 1])];
   const height = ys.length ? Math.max(...ys) - Math.min(...ys) : 1;
   const occ = occupancy(p);
   const free = (x: number, y: number) => !occ.has(cellKey(x, y));
