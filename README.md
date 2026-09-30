@@ -128,6 +128,36 @@ get their belts laid out as tiles automatically when loaded. **Factories ▾** l
 export (`.factory.json`) and import them. Imports are validated and repaired, so a
 hand-edited file with dangling references still loads.
 
+## Deploy server
+
+A server can follow the `dev` branch on its own, without GitHub Actions or
+webhooks. Run this once on the server (Ubuntu, as the user that should own the
+app):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yume02kki/DataFactory/dev/deploy/install.sh | bash
+```
+
+It installs Node.js 22 and git if they're missing, clones `dev` to `~/DataFactory`
+and sets up two systemd services:
+
+- `datafactory` runs `npm run dev` on port 5173 (reachable from outside) and
+  restarts it if it crashes.
+- `datafactory-sync` (a timer) checks GitHub every 30 seconds. When `dev` has
+  new commits it pulls them, runs `npm ci` if dependencies changed, and
+  restarts the dev server.
+
+So a push to `dev` is live within about 30 seconds. Useful commands on the server:
+
+```bash
+journalctl -u datafactory-sync -f   # watch deploys
+journalctl -u datafactory -f        # dev server output
+sudo systemctl start datafactory-sync   # check for a new push right now
+```
+
+Settings can be passed to the installer as environment variables: `BRANCH`,
+`APP_DIR`, `PORT`, `INTERVAL`. Running it again is safe and updates the setup.
+
 ## Project layout
 
 ```
