@@ -736,7 +736,8 @@ select:focus {
   font-weight: 700;
 }
 
-.bp-form label {
+.bp-form label,
+.bp-form .bp-field {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -1803,4 +1804,101 @@ select:focus {
 
 .link-icon .li-head {
   fill: #ef5072;
+}
+
+/* ---------- icons ---------- */
+
+.icon-picker {
+  position: relative;
+}
+
+.icon-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 9px;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 12px;
+  text-align: left;
+  text-transform: capitalize;
+}
+
+.icon-current .chev {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.icon-none {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.icon-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: 250px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--panel-solid);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow);
+}
+
+.icon-search {
+  margin-bottom: 8px;
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.icon-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  min-width: 0;
+}
+
+.icon-cell:hover {
+  background: var(--hover);
+}
+
+.icon-cell.on {
+  border-color: var(--select);
+  background: rgba(74, 163, 223, 0.12);
+}
+
+.icon-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9.5px;
+  color: var(--muted);
+}
+
+.icon-image {
+  flex: none;
 }

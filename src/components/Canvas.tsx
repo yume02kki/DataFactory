@@ -487,7 +487,8 @@ export function Canvas() {
     const blueprint = tool.blueprintId ? pipeline.blueprints.find((b) => b.id === tool.blueprintId) : undefined;
     const color = tool.template?.color ?? blueprint?.color ?? KIND_META[tool.kind].color;
     const valid = ops.canPlaceNode(pipeline, at.x, at.y);
-    return { building: { kind: tool.kind as NodeKind, at, color, valid } };
+    const icon = tool.template ? tool.template.icon : blueprint?.icon;
+    return { building: { kind: tool.kind as NodeKind, at, color, valid, icon } };
   }, [hover, tool, rotation, pipeline, paintPreview]);
 
   const previewTiles = useMemo(() => {
@@ -590,7 +591,7 @@ export function Canvas() {
           {previewTiles && <BeltTiles tiles={previewTiles.tiles} inflow={previewTiles.inflow} className="belt-ghost" />}
           {ghost?.building && (
             <g className={`ghost-building${ghost.building.valid ? '' : ' invalid'}`}>
-              <BuildingArt kind={ghost.building.kind} cells={[ghost.building.at]} rotation={rotation} color={ghost.building.color} />
+              <BuildingArt kind={ghost.building.kind} cells={[ghost.building.at]} rotation={rotation} color={ghost.building.color} icon={ghost.building.icon} />
               {!ghost.building.valid && (
                 <rect
                   className="ghost-block"

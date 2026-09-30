@@ -44,6 +44,16 @@ Buffers and stores are drawn as **tanks**, not machines: fully rounded vessels
 buildings, so belts meet a flat edge. Buffers show their queued items through
 a round window in each block. Stores carry the storage symbol.
 
+### Icons
+
+Any building can show an icon from the bundled set of 71 (in `src/assets/icons`)
+instead of its kind's symbol: databases, queues, clouds, languages, tools and
+shapez-style machines. Pick one under **Icon** in the building's inspector. The
+grid is searchable. Component types in the palette can carry an icon too, and
+every building made from that type gets it. The starter types come with generic
+icons. Icons are drawn inline, so they stay sharp at any zoom and appear in PNG/GIF
+exports.
+
 ### Combining item looks
 
 A machine can build the look of what it produces from what it consumes, like

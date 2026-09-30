@@ -4,6 +4,8 @@ import { uid } from '../model/ids';
 import * as ops from '../model/ops';
 import type { Arrow, CombineMode, FactoryNode, ItemType, Pipeline } from '../model/types';
 import { BeltIcon, LinkIcon } from './Hotbar';
+import { IconPicker } from './IconPicker';
+import { ICON_NAMES } from '../lib/icons';
 import { inputCells, outputCells } from '../model/geometry';
 import { useFactory } from '../store/useFactory';
 import { ItemIcon } from './ItemGlyph';
@@ -269,7 +271,7 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
 
   return (
     <div className="insp-body">
-      <Header icon={<KindIcon kind={node.kind} color={node.color} size={40} />} eyebrow={node.cells.length > 1 ? `${meta.label} · ${node.cells.length} blocks · ${portSummary(node)}` : meta.label} title={node.name || meta.label} />
+      <Header icon={<KindIcon kind={node.kind} color={node.color} icon={node.icon} size={40} />} eyebrow={node.cells.length > 1 ? `${meta.label} · ${node.cells.length} blocks · ${portSummary(node)}` : meta.label} title={node.name || meta.label} />
 
       <Field label="Name">
         <input value={node.name} onChange={(e) => set('name', e.target.value)} placeholder={`e.g. ${meta.label} name`} />
@@ -294,6 +296,9 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
       </div>
       <Field label="Description">
         <textarea rows={2} value={node.description} onChange={(e) => set('description', e.target.value)} placeholder="What happens here?" />
+      </Field>
+      <Field label="Icon" hint={`${ICON_NAMES.length} to pick from`}>
+        <IconPicker value={node.icon} onChange={(icon) => set('icon', icon)} />
       </Field>
       <Field label="Colour">
         <Swatches value={node.color} first={meta.color} onChange={(c) => set('color', c)} />

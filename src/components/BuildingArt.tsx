@@ -1,3 +1,4 @@
+import { ICONS, ICON_VIEWBOX, hasIcon } from '../lib/icons';
 import { memo } from 'react';
 import { shade } from '../lib/color';
 import { KIND_META } from '../model/defaults';
@@ -69,6 +70,18 @@ interface Props {
   /** Items shown queued inside a buffer. */
   queue?: ItemType[];
   ports?: boolean;
+  /** Icon from the icon set, shown instead of the kind's symbol. */
+  icon?: string;
+}
+
+/** Size an icon is drawn at on a building, in world pixels. */
+const ICON_SIZE = 28;
+
+/** An icon from the set, inlined and centred on (x, y). */
+export function IconGlyph({ name, x, y, size = ICON_SIZE }: { name: string; x: number; y: number; size?: number }) {
+  if (!hasIcon(name)) return null;
+  const s = size / ICON_VIEWBOX;
+  return <g className="icon-glyph" transform={`translate(${x - size / 2} ${y - size / 2}) scale(${s})`} dangerouslySetInnerHTML={{ __html: ICONS[name] }} />;
 }
 
 /** Where the symbol goes: the shape's centre when that lies inside it (e.g. a 2×2), else the block nearest to it. */
@@ -87,7 +100,7 @@ function symbolPoint(cells: Pt[]): Pt {
  * plate, so any shape reads as a single building. Every exposed back face gets
  * an input tab and every exposed front face an output tab; the symbol stays upright.
  */
-export const BuildingArt = memo(function BuildingArt({ kind, cells, rotation = 0, color, queue = [], ports = true }: Props) {
+export const BuildingArt = memo(function BuildingArt({ kind, cells, rotation = 0, color, queue = [], ports = true, icon }: Props) {
   const meta = KIND_META[kind];
   const node = { x: 0, y: 0, cells: cells.map((c) => [c.x, c.y] as [number, number]), rotation };
   const [fx, fy] = DV[rotation];
@@ -108,14 +121,18 @@ export const BuildingArt = memo(function BuildingArt({ kind, cells, rotation = 0
       {ports && meta.hasInput && inputCells(node).map((c) => tab(c, back, 1.5))}
       {ports && meta.hasOutput && outputCells(node).map((c) => tab(c, rotation, -1.5))}
       {tank ? (
-        <Tank kind={kind} cells={cells} color={color} queue={queue} />
+        <Tank kind={kind} cells={cells} color={color} queue={queue} icon={icon} />
       ) : (
         <>
           <path className="plate" d={outlinePath(cells, 2.5, 7)} fillRule="evenodd" />
           <path className="body" d={outlinePath(cells, 7, 5)} fillRule="evenodd" fill={kind === 'source' ? shade(color, 0.45) : color} />
-          <g transform={`translate(${sym.x} ${sym.y})`}>
-            <KindSymbol kind={kind as 'source' | 'machine'} color={color} />
-          </g>
+          {hasIcon(icon) ? (
+            <IconGlyph name={icon} x={sym.x} y={sym.y} />
+          ) : (
+            <g transform={`translate(${sym.x} ${sym.y})`}>
+              <KindSymbol kind={kind as 'source' | 'machine'} color={color} />
+            </g>
+          )}
         </>
       )}
     </g>
@@ -128,17 +145,20 @@ export const BuildingArt = memo(function BuildingArt({ kind, cells, rotation = 0
  * frame as other buildings, so belts meet a flat edge. Buffers show their
  * queued items through round windows, one per block; stores carry the storage symbol.
  */
-function Tank({ kind, cells, color, queue }: { kind: 'buffer' | 'store'; cells: Pt[]; color: string; queue: ItemType[] }) {
+function Tank({ kind, cells, color, queue, icon }: { kind: 'buffer' | 'store'; cells: Pt[]; color: string; queue: ItemType[]; icon?: string }) {
   const round = CELL / 2;
   const dark = shade(color, -0.3);
   const light = shade(color, 0.45);
   const sym = symbolPoint(cells);
+  const withIcon = hasIcon(icon);
+  // With an icon, the block holding it has no item window.
+  const windows = cells.filter((c) => !withIcon || Math.hypot(cellCenter(c.x, c.y).x - sym.x, cellCenter(c.x, c.y).y - sym.y) > CELL * 0.6);
   return (
     <g className={`tank tank-${kind}`}>
       <path className="plate" d={outlinePath(cells, 2.5, 7)} fillRule="evenodd" />
       <path className="body" d={outlinePath(cells, 5.5, round - 5.5)} fillRule="evenodd" fill={color} />
       {kind === 'buffer' &&
-        cells.slice(0, 12).map((c, i) => {
+        windows.slice(0, 12).map((c, i) => {
           const p = cellCenter(c.x, c.y);
           const item = queue.length ? queue[i % queue.length] : null;
           return (
@@ -148,7 +168,8 @@ function Tank({ kind, cells, color, queue }: { kind: 'buffer' | 'store'; cells: 
             </g>
           );
         })}
-      {kind === 'store' && (
+      {withIcon && <IconGlyph name={icon} x={sym.x} y={sym.y} />}
+      {kind === 'store' && !withIcon && (
         <g className="body" fill="#fff" transform={`translate(${sym.x} ${sym.y})`}>
           <path d="M -9 -6 L -9 6 A 9 3.2 0 0 0 9 6 L 9 -6" />
           <path d="M -9 0 A 9 3.2 0 0 0 9 0" fill="none" />

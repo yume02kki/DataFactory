@@ -5,6 +5,7 @@ import { useFactory } from '../store/useFactory';
 import { DND_MIME, type DragPayload } from './Canvas';
 import { ItemIcon } from './ItemGlyph';
 import { KindIcon } from './KindIcon';
+import { IconPicker } from './IconPicker';
 
 function setDrag(e: React.DragEvent, payload: DragPayload) {
   e.dataTransfer.setData(DND_MIME, JSON.stringify(payload));
@@ -145,7 +146,7 @@ function KindSection({ kind, collapsed, onToggle }: { kind: NodeKind; collapsed:
                   onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && place(bp)}
                   title={`${bp.description || meta.hint}\nClick, then left-click the floor to build`}
                 >
-                  <KindIcon kind={kind} color={bp.color} size={38} />
+                  <KindIcon kind={kind} color={bp.color} icon={bp.icon} size={38} />
                   <span className="tile-name">{bp.name}</span>
                   {bp.technology && <span className="tile-tech">{bp.technology}</span>}
                   <button
@@ -187,11 +188,12 @@ function BlueprintForm({ kind, blueprint, onDone }: { kind: NodeKind; blueprint?
   const [description, setDescription] = useState(blueprint?.description ?? '');
   const [technology, setTechnology] = useState(blueprint?.technology ?? '');
   const [color, setColor] = useState(blueprint?.color ?? meta.color);
+  const [icon, setIcon] = useState<string | undefined>(blueprint?.icon);
   const { edit, addBlueprint, deleteBlueprint } = useFactory.getState();
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = { name: name.trim() || `Custom ${meta.label}`, description: description.trim(), technology: technology.trim(), color };
+    const clean = { name: name.trim() || `Custom ${meta.label}`, description: description.trim(), technology: technology.trim(), color, icon };
     if (blueprint) {
       edit((p) => {
         const bp = p.blueprints.find((b) => b.id === blueprint.id);
@@ -218,6 +220,10 @@ function BlueprintForm({ kind, blueprint, onDone }: { kind: NodeKind; blueprint?
         Description
         <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does it do?" />
       </label>
+      <div className="bp-field">
+        Icon
+        <IconPicker value={icon} onChange={setIcon} />
+      </div>
       <div className="swatches">
         {[meta.color, ...SWATCHES.filter((s) => s !== meta.color)].map((s) => (
           <button

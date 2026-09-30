@@ -57,6 +57,8 @@ export interface Blueprint {
   description: string;
   technology: string;
   color: string;
+  /** Icon from the icon set, given to every building made from this type. */
+  icon?: string;
 }
 
 export interface MetaEntry {
@@ -85,6 +87,8 @@ export interface FactoryNode {
    * Every exposed front face is an output port and every exposed back face an input port.
    */
   cells: Array<[number, number]>;
+  /** Icon from the icon set shown on the building instead of its kind's symbol. */
+  icon?: string;
   /** How this machine derives its outputs' look from its inputs. */
   combine?: CombineMode;
   /** Item type ids this component consumes, in order (A, B, ...). */

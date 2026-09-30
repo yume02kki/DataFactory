@@ -114,6 +114,7 @@ export function normalizePipeline(input: unknown): Pipeline {
             description: str(o.description),
             technology: str(o.technology),
             color: str(o.color, KIND_META[kind].color),
+            ...(typeof o.icon === 'string' && o.icon ? { icon: o.icon } : {}),
           };
         })
     : starterBlueprints();
@@ -134,6 +135,7 @@ export function normalizePipeline(input: unknown): Pipeline {
         x: Math.round(num(o.x)),
         y: Math.round(num(o.y)),
         rotation: ([0, 1, 2, 3].includes(o.rotation as number) ? o.rotation : 0) as Dir,
+        ...(typeof o.icon === 'string' && o.icon ? { icon: o.icon } : {}),
         cells: readCells(o, ([0, 1, 2, 3].includes(o.rotation as number) ? o.rotation : 0) as Dir),
         ...(kind === 'machine' && ['stack', 'paint', 'mix'].includes(o.combine as string) ? { combine: o.combine as CombineMode } : {}),
         inputs: KIND_META[kind].hasInput ? ids(o.inputs) : [],

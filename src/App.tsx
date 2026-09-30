@@ -137,8 +137,8 @@ export default function App() {
         const cell = hoverCell();
         const occ = cell ? ops.occupancy(s.pipeline).get(cellKey(cell.x, cell.y)) : undefined;
         if (occ?.node) {
-          const { name, type, technology, description, color, inputs, outputs, metadata } = occ.node;
-          s.setTool({ type: 'building', kind: occ.node.kind, blueprintId: null, template: { name, type, technology, description, color, inputs, outputs, metadata } });
+          const { name, type, technology, description, color, icon, inputs, outputs, metadata } = occ.node;
+          s.setTool({ type: 'building', kind: occ.node.kind, blueprintId: null, template: { name, type, technology, description, color, icon, inputs, outputs, metadata } });
           useFactory.setState({ rotation: occ.node.rotation });
         } else if (occ?.tile) {
           s.setTool({ type: 'belt' });

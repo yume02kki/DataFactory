@@ -75,32 +75,34 @@ export const SWATCHES = [
  * Generic component types. These describe *roles*, never technologies —
  * the technology is always something the user fills in.
  */
-const STARTER_BLUEPRINTS: Array<[NodeKind, string, string]> = [
-  ['source', 'API', 'Data pulled from or pushed by an API'],
-  ['source', 'File Drop', 'Files landing somewhere'],
-  ['source', 'Database', 'Rows read from an operational database'],
-  ['source', 'Event Stream', 'Events emitted continuously'],
-  ['machine', 'Transformer', 'Reshapes items into another form'],
-  ['machine', 'Enricher', 'Adds information to items'],
-  ['machine', 'Validator', 'Checks items and rejects bad ones'],
-  ['machine', 'Filter', 'Lets only some items through'],
-  ['machine', 'Aggregator', 'Combines many items into fewer'],
+/** Generic starter types, each with a fitting generic icon (buffers keep their item windows). */
+const STARTER_BLUEPRINTS: Array<[NodeKind, string, string, string?]> = [
+  ['source', 'API', 'Data pulled from or pushed by an API', 'api'],
+  ['source', 'File Drop', 'Files landing somewhere', 'file'],
+  ['source', 'Database', 'Rows read from an operational database', 'db'],
+  ['source', 'Event Stream', 'Events emitted continuously', 'constant_signal'],
+  ['machine', 'Transformer', 'Reshapes items into another form', 'rotater'],
+  ['machine', 'Enricher', 'Adds information to items', 'painter'],
+  ['machine', 'Validator', 'Checks items and rejects bad ones', 'analyzer'],
+  ['machine', 'Filter', 'Lets only some items through', 'filter'],
+  ['machine', 'Aggregator', 'Combines many items into fewer', 'stacker'],
   ['buffer', 'Queue', 'Holds items until they are consumed'],
   ['buffer', 'Stream', 'Durable, replayable log of items'],
   ['buffer', 'Staging Area', 'Temporary landing zone'],
-  ['store', 'Database', 'Persistent, queryable storage'],
-  ['store', 'Warehouse', 'Analytical storage'],
-  ['store', 'Object Storage', 'Files and blobs'],
+  ['store', 'Database', 'Persistent, queryable storage', 'db'],
+  ['store', 'Warehouse', 'Analytical storage', 'table'],
+  ['store', 'Object Storage', 'Files and blobs', 'storage'],
 ];
 
 export function starterBlueprints(): Blueprint[] {
-  return STARTER_BLUEPRINTS.map(([kind, name, description]) => ({
+  return STARTER_BLUEPRINTS.map(([kind, name, description, icon]) => ({
     id: uid('bp'),
     kind,
     name,
     description,
     technology: '',
     color: KIND_META[kind].color,
+    ...(icon ? { icon } : {}),
   }));
 }
 
@@ -120,7 +122,7 @@ export function makeNode(
   kind: NodeKind,
   x: number,
   y: number,
-  blueprint?: Pick<Blueprint, 'name' | 'technology' | 'color' | 'description'>,
+  blueprint?: Pick<Blueprint, 'name' | 'technology' | 'color' | 'description' | 'icon'>,
   rotation: Dir = 0,
 ): FactoryNode {
   return {
@@ -138,6 +140,7 @@ export function makeNode(
     inputs: [],
     outputs: [],
     metadata: [],
+    ...(blueprint?.icon ? { icon: blueprint.icon } : {}),
   };
 }
 
@@ -238,10 +241,12 @@ export function examplePipeline(): Pipeline {
   });
 
   const source = node('source', 'API', 'Visit Source', 'Tracking pixel API', 0, 0, {
+    icon: 'api',
     outputs: [visit.id],
     description: 'Receives page visits from the website tracker.',
   });
   const enrich = node('machine', 'Enricher', 'Enrichment Machine', 'Custom Python Service', 5, 0, {
+    icon: 'python',
     inputs: [visit.id],
     outputs: [enriched.id],
     description: 'Adds geo and device info to each visit.',
@@ -251,12 +256,14 @@ export function examplePipeline(): Pipeline {
     ],
   });
   const buffer = node('buffer', 'Stream', 'Event Buffer', 'Kafka', 10, 0, {
+    icon: 'kafka_topic',
     inputs: [enriched.id],
     outputs: [enriched.id],
     description: 'Decouples enrichment from downstream processing.',
     metadata: [{ id: uid('m'), key: 'retention', value: '7 days' }],
   });
   const validate = node('machine', 'Validator', 'Validation Machine', 'Stream processor', 15, 0, {
+    icon: 'analyzer',
     cells: [
       [0, 0],
       [0, 1],
@@ -266,15 +273,18 @@ export function examplePipeline(): Pipeline {
     description: 'Drops bots and malformed visits.',
   });
   const aggregate = node('machine', 'Aggregator', 'Aggregation Machine', 'Flink', 20, 0, {
+    icon: 'flink',
     inputs: [valid.id],
     outputs: [summary.id],
     description: 'Rolls visits up into hourly summaries.',
   });
   const store = node('store', 'Warehouse', 'Analytics Store', 'Snowflake', 25, 0, {
+    icon: 'snowflake',
     inputs: [summary.id],
     description: 'Serves dashboards and ad-hoc analysis.',
   });
   const dead = node('store', 'Object Storage', 'Rejected Visits', 'S3 bucket', 20, 5, {
+    icon: 's3',
     inputs: [invalid.id],
     description: 'Kept for debugging the tracker.',
   });
