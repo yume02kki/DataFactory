@@ -6,6 +6,16 @@ import { KindIcon } from './KindIcon';
 export const BELT_HOTKEY = '1';
 export const LINK_HOTKEY = '6';
 export const AREA_HOTKEY = '7';
+export const TEXT_HOTKEY = '8';
+
+export function TextIcon({ size = 34 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden className="text-icon">
+      <rect x="3" y="4" width="26" height="24" rx="5" className="ti-card" />
+      <path d="M 10 10 L 22 10 M 16 10 L 16 23" className="ti-letter" />
+    </svg>
+  );
+}
 
 export function AreaIcon({ size = 34, color = '#66a7ff' }: { size?: number; color?: string }) {
   return (
@@ -45,6 +55,7 @@ function toolLabel(tool: Tool | null, blueprintName?: string): string {
   if (tool.type === 'link') return 'Link';
   if (tool.type === 'paste') return 'Paste';
   if (tool.type === 'area') return 'Area';
+  if (tool.type === 'text') return 'Text';
   return tool.template?.name ?? blueprintName ?? KIND_META[tool.kind].label;
 }
 
@@ -61,12 +72,16 @@ export function Hotbar() {
       {tool && (
         <div className="tool-hint">
           <b>{toolLabel(tool, blueprintName)}</b>
-          {tool.type !== 'link' && tool.type !== 'paste' && tool.type !== 'area' && (
+          {tool.type !== 'link' && tool.type !== 'paste' && tool.type !== 'area' && tool.type !== 'text' && (
             <span className="rot" style={{ transform: `rotate(${rotation * 90}deg)` }}>
               ➜
             </span>
           )}
-          {tool.type === 'area' ? (
+          {tool.type === 'text' ? (
+            <span>
+              Click to place a text box, then type · <kbd>Right</kbd> / <kbd>Esc</kbd> done
+            </span>
+          ) : tool.type === 'area' ? (
             <span>
               Drag a rectangle to mark part of the factory · <kbd>Right</kbd> / <kbd>Esc</kbd> done
             </span>
@@ -119,6 +134,14 @@ export function Hotbar() {
         >
           <AreaIcon />
           <kbd>{AREA_HOTKEY}</kbd>
+        </button>
+        <button
+          className={`hot-slot${tool?.type === 'text' ? ' active' : ''}`}
+          onClick={() => setTool(tool?.type === 'text' ? null : { type: 'text' })}
+          title="Text — click to place a note on the floor"
+        >
+          <TextIcon />
+          <kbd>{TEXT_HOTKEY}</kbd>
         </button>
       </div>
     </div>

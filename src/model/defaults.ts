@@ -156,6 +156,7 @@ export function blankPipeline(name = 'Untitled factory'): Pipeline {
     belts: [],
     arrows: [],
     areas: [],
+    texts: [],
     view: { x: 0, y: 0, zoom: 1 },
     createdAt: now,
     updatedAt: now,

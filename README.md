@@ -135,6 +135,15 @@ area together with everything wholly inside it. Drag the corner dot to resize.
 Right-click the name tag (or press `Del` while it's selected) to remove the area;
 the buildings stay where they are.
 
+## Text
+
+Press `8` (or the **T** slot in the hotbar) and click the floor to drop a text
+box, then type straight away in the side panel (`Enter` makes a new line). Pick
+small, medium or large text, a colour, and whether it sits on a card. Drag a
+note to move it, and drag the dot on its right edge to change how wide it wraps.
+Double-click a note to edit it, and right-click it (or `Del`) to delete it. Notes
+inside an area move along with the area.
+
 ## Exporting images
 
 **Export ▾** in the top bar saves the factory as a **PNG** (rendered at 2×), an

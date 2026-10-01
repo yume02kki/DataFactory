@@ -2,7 +2,7 @@ import { ARROW_COLOR, KIND_META, NODE_KINDS, ITEM_SHAPES, starterBlueprints } fr
 import { uid } from './ids';
 import { inputCells, lPath, normalizeOffsets, outputCells } from './geometry';
 import { applyRecipes, mergeTouching, paintBelt, pruneBranches } from './ops';
-import type { Arrow, BeltTile, Blueprint, CombineMode, Dir, FactoryNode, ItemType, Pipeline } from './types';
+import type { Arrow, BeltTile, Blueprint, CombineMode, Dir, FactoryNode, ItemType, Pipeline, TextSize } from './types';
 
 // Preview channels (e.g. the /dev site) keep their own saved factories, so an
 // experimental build can't disturb the factories saved on the main site.
@@ -194,6 +194,19 @@ export function normalizePipeline(input: unknown): Pipeline {
         y: Math.round(num(o.y)),
         w: Math.max(1, Math.round(num(o.w, 1))),
         h: Math.max(1, Math.round(num(o.h, 1))),
+      })),
+    texts: arr(raw.texts)
+      .map((v) => obj(v))
+      .filter((o) => Number.isFinite(o.x) && Number.isFinite(o.y))
+      .map((o) => ({
+        id: str(o.id) || uid('text'),
+        text: str(o.text),
+        x: Math.round(num(o.x)),
+        y: Math.round(num(o.y)),
+        w: Math.max(2, Math.round(num(o.w, 6))),
+        size: (['s', 'm', 'l'].includes(o.size as string) ? o.size : 'm') as TextSize,
+        color: str(o.color),
+        card: o.card === true,
       })),
     view: { x: num(view.x), y: num(view.y), zoom: Math.min(2.5, Math.max(0.2, num(view.zoom, 1))) },
     createdAt: num(raw.createdAt, now),

@@ -2015,3 +2015,57 @@ select:focus {
   stroke: var(--ink);
   stroke-width: 1.5;
 }
+
+/* ---------- text boxes: free notes on the floor ---------- */
+.text-hit {
+  fill: transparent;
+  cursor: move;
+}
+.text-box.card .text-hit {
+  fill: var(--panel-solid);
+  stroke: var(--panel-border);
+  stroke-width: 1.5;
+}
+.text-box.selected .text-hit {
+  stroke: var(--select);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+.text-body {
+  fill: var(--text);
+  pointer-events: none;
+  white-space: pre;
+}
+.text-body.empty {
+  opacity: 0.4;
+  font-style: italic;
+}
+.text-handle {
+  cursor: ew-resize;
+}
+.text-handle circle {
+  fill: var(--select);
+  stroke: var(--panel-solid);
+  stroke-width: 2.5;
+}
+.text-handle path {
+  stroke: #fff;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+.swatch.ink {
+  background: var(--text);
+}
+.text-icon .ti-card {
+  fill: var(--plate);
+  stroke: var(--ink);
+  stroke-width: 1.8;
+}
+.text-icon .ti-letter {
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+  fill: none;
+}

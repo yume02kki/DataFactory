@@ -770,11 +770,13 @@ export function pasteClip(p: Pipeline, clip: Clip, at: Pt): { nodes: string[]; t
 /* ---------- areas ---------- */
 
 /** Buildings and belt tiles lying wholly inside an area. */
-export function areaContents(p: Pipeline, area: Area): { nodes: string[]; tiles: string[] } {
+export function areaContents(p: Pipeline, area: Area): { nodes: string[]; tiles: string[]; texts: string[] } {
   const inside = (c: Pt) => c.x >= area.x && c.x < area.x + area.w && c.y >= area.y && c.y < area.y + area.h;
   return {
     nodes: p.nodes.filter((n) => nodeCells(n).every(inside)).map((n) => n.id),
     tiles: p.belts.filter((t) => inside(t)).map((t) => t.id),
+    // A text box belongs to the area its top-left corner is in.
+    texts: p.texts.filter((t) => inside(t)).map((t) => t.id),
   };
 }
 

@@ -10,7 +10,7 @@ import type { Blueprint, Dir, FactoryNode, ItemType, NodeKind, Pipeline, Selecti
 const HISTORY_LIMIT = 120;
 const COALESCE_MS = 1200;
 
-const EMPTY_SELECTION: Selection = { nodes: [], tiles: [], belt: null, arrow: null, area: null, item: null };
+const EMPTY_SELECTION: Selection = { nodes: [], tiles: [], belt: null, arrow: null, area: null, text: null, item: null };
 
 export interface Toast {
   id: number;
@@ -35,6 +35,9 @@ export interface FactoryState {
   clipboard: ops.Clip | null;
   /** Set while the user drags a box to choose what to export. */
   exportArea: { format: ExportFormat; grid: boolean } | null;
+  /** A text box whose text field should take the keyboard (just placed or double-clicked). */
+  editText: string | null;
+  setEditText: (id: string | null) => void;
 
   loadPipeline: (p: Pipeline) => void;
   /** Applies a change to the pipeline. Edits sharing a `coalesce` key within a short window form one undo step. */
@@ -104,12 +107,13 @@ export const useFactory = create<FactoryState>()((set, get) => {
       belt: sel.belt && tileIds.has(sel.belt) ? sel.belt : null,
       arrow: sel.arrow && p.arrows.some((a) => a.id === sel.arrow) ? sel.arrow : null,
       area: sel.area && p.areas.some((a) => a.id === sel.area) ? sel.area : null,
+      text: sel.text && p.texts.some((t) => t.id === sel.text) ? sel.text : null,
       item: sel.item && p.items.some((i) => i.id === sel.item) ? sel.item : null,
     };
   };
 
   return {
-    pipeline: { id: '', name: '', description: '', items: [], blueprints: [], nodes: [], belts: [], arrows: [], areas: [], view: { x: 0, y: 0, zoom: 1 }, createdAt: 0, updatedAt: 0 },
+    pipeline: { id: '', name: '', description: '', items: [], blueprints: [], nodes: [], belts: [], arrows: [], areas: [], texts: [], view: { x: 0, y: 0, zoom: 1 }, createdAt: 0, updatedAt: 0 },
     view: { x: 0, y: 0, zoom: 1 },
     selection: EMPTY_SELECTION,
     past: [],
@@ -121,6 +125,8 @@ export const useFactory = create<FactoryState>()((set, get) => {
     tool: null,
     rotation: 0,
     exportArea: null,
+    editText: null,
+    setEditText: (editText) => set({ editText }),
     clipboard: null,
 
     loadPipeline: (p) =>
@@ -345,6 +351,8 @@ export const useFactory = create<FactoryState>()((set, get) => {
           ops.removeNodes(p, selection.nodes);
           ops.removeTiles(p, selection.tiles);
         });
+      } else if (selection.text) {
+        get().edit((p) => void (p.texts = p.texts.filter((t) => t.id !== selection.text)));
       } else if (selection.area) {
         get().edit((p) => void (p.areas = p.areas.filter((a) => a.id !== selection.area)));
       } else if (selection.arrow) {

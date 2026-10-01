@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ARROW_COLOR, ITEM_SHAPES, KIND_META, SWATCHES } from '../model/defaults';
 import { uid } from '../model/ids';
 import * as ops from '../model/ops';
-import type { Area, Arrow, CombineMode, FactoryNode, ItemType, Pipeline } from '../model/types';
-import { AreaIcon, BeltIcon, LinkIcon } from './Hotbar';
+import type { Area, Arrow, CombineMode, FactoryNode, ItemType, Pipeline, TextBox } from '../model/types';
+import { AreaIcon, BeltIcon, LinkIcon, TextIcon } from './Hotbar';
+import { TEXT_SIZES } from './TextView';
 import { IconPicker } from './IconPicker';
 import { ICON_NAMES } from '../lib/icons';
 import { inputCells, outputCells } from '../model/geometry';
@@ -33,6 +34,9 @@ export function Inspector() {
   } else if (selection.arrow) {
     const arrow = pipeline.arrows.find((a) => a.id === selection.arrow);
     if (arrow) body = <ArrowInspector key={arrow.id} arrow={arrow} pipeline={pipeline} />;
+  } else if (selection.text) {
+    const box = pipeline.texts.find((t) => t.id === selection.text);
+    if (box) body = <TextInspector key={box.id} box={box} />;
   } else if (selection.area) {
     const area = pipeline.areas.find((a) => a.id === selection.area);
     if (area) body = <AreaInspector key={area.id} area={area} pipeline={pipeline} />;
@@ -401,6 +405,74 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
         <button className="btn" onClick={() => useFactory.getState().areaFromSelection()} title="Draw a coloured area around the selection">
           Mark as area <kbd>Ctrl G</kbd>
         </button>
+        <button className="btn danger" onClick={() => useFactory.getState().deleteSelection()}>
+          Delete <kbd>Del</kbd>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- text ---------- */
+
+function TextInspector({ box }: { box: TextBox }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const editText = useFactory((s) => s.editText);
+  // Just placed or double-clicked: start typing straight away.
+  useEffect(() => {
+    if (editText !== box.id) return;
+    // After the click that asked for it, which would otherwise take focus back to the page.
+    const t = setTimeout(() => {
+      ref.current?.focus();
+      ref.current?.select();
+      useFactory.getState().setEditText(null);
+    }, 30);
+    return () => clearTimeout(t);
+  }, [editText, box.id]);
+  const set = <K extends keyof TextBox>(key: K, value: TextBox[K], coalesce = false) =>
+    edit(
+      (p) => {
+        const t = p.texts.find((x) => x.id === box.id);
+        if (t) t[key] = value;
+      },
+      coalesce ? { coalesce: `${box.id}:${String(key)}` } : {},
+    );
+  const first = box.text.split('\n')[0].trim();
+  return (
+    <div className="insp-body">
+      <Header icon={<TextIcon size={34} />} eyebrow="Text" title={first ? (first.length > 30 ? `${first.slice(0, 29)}…` : first) : 'Empty text'} />
+      <Field label="Text" hint="Enter for a new line">
+        <textarea ref={ref} rows={4} value={box.text} placeholder="Write a note…" onChange={(e) => set('text', e.target.value, true)} />
+      </Field>
+      <Field label="Size">
+        <div className="segmented">
+          {(Object.keys(TEXT_SIZES) as Array<keyof typeof TEXT_SIZES>).map((s) => (
+            <button key={s} className={box.size === s ? 'on' : ''} onClick={() => set('size', s)}>
+              {TEXT_SIZES[s].label}
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Colour">
+        <div className="swatches">
+          <button type="button" className={`swatch ink${box.color ? '' : ' active'}`} onClick={() => set('color', '')} aria-label="Default colour" title="Default" />
+          {SWATCHES.map((s) => (
+            <button key={s} type="button" className={`swatch${s === box.color ? ' active' : ''}`} style={{ background: s }} onClick={() => set('color', s)} aria-label={`Colour ${s}`} />
+          ))}
+        </div>
+      </Field>
+      <Field label="Background">
+        <div className="segmented">
+          <button className={box.card ? '' : 'on'} onClick={() => set('card', false)}>
+            None
+          </button>
+          <button className={box.card ? 'on' : ''} onClick={() => set('card', true)}>
+            Card
+          </button>
+        </div>
+      </Field>
+      <p className="muted small">Drag the text to move it; drag the dot on its right edge to change how wide it wraps. Double-click to edit, right-click to delete.</p>
+      <div className="insp-actions">
         <button className="btn danger" onClick={() => useFactory.getState().deleteSelection()}>
           Delete <kbd>Del</kbd>
         </button>

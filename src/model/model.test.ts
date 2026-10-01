@@ -661,3 +661,26 @@ describe('joining belts', () => {
     expect(back.belts.find((t) => t.x === 2 && t.y === 0)!.branches).toEqual([1]);
   });
 });
+
+describe('text boxes', () => {
+  it('keeps text boxes through save and load', () => {
+    const p = normalizePipeline({
+      texts: [
+        { id: 't1', text: 'Hello\nworld', x: 2, y: 3, w: 8, size: 'l', color: '#ff0', card: true },
+        { id: 't2', text: 'Defaults', x: 0, y: 0 },
+        { text: 'no position' },
+      ],
+    });
+    expect(p.texts).toEqual([
+      { id: 't1', text: 'Hello\nworld', x: 2, y: 3, w: 8, size: 'l', color: '#ff0', card: true },
+      { id: 't2', text: 'Defaults', x: 0, y: 0, w: 6, size: 'm', color: '', card: false },
+    ]);
+  });
+
+  it('counts a note as inside the area its corner is in', () => {
+    const p = blankPipeline();
+    p.texts.push({ id: 'in', text: 'a', x: 1, y: 1, w: 20, size: 'm', color: '', card: false });
+    p.texts.push({ id: 'out', text: 'b', x: 9, y: 1, w: 2, size: 'm', color: '', card: false });
+    expect(ops.areaContents(p, { id: 'a', name: '', color: '', x: 0, y: 0, w: 5, h: 5 }).texts).toEqual(['in']);
+  });
+});

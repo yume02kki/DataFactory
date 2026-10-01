@@ -11,6 +11,7 @@ import { NodeView } from './NodeView';
 import { BuildingArt } from './BuildingArt';
 import { ArrowPreview, ArrowView } from './ArrowView';
 import { AreaView } from './AreaView';
+import { TextView } from './TextView';
 import { uid } from '../model/ids';
 
 export const DND_MIME = 'application/x-datafactory';
@@ -48,7 +49,9 @@ type Gesture =
   | { type: 'exportArea'; start: Pt }
   | { type: 'link'; from: string }
   | { type: 'areaDraw'; start: Pt }
-  | { type: 'areaMove'; id: string; start: Pt; origin: Pt; nodes: Map<string, Pt>; tiles: Map<string, Pt>; last: Pt; moved: boolean }
+  | { type: 'areaMove'; id: string; start: Pt; origin: Pt; nodes: Map<string, Pt>; tiles: Map<string, Pt>; texts: Map<string, Pt>; last: Pt; moved: boolean }
+  | { type: 'textMove'; id: string; start: Pt; origin: Pt; moved: boolean }
+  | { type: 'textResize'; id: string; start: Pt; w0: number }
   | { type: 'areaResize'; id: string; start: Pt; w0: number; h0: number };
 
 interface LinkPreview {
@@ -191,6 +194,23 @@ export function Canvas() {
       return;
     }
 
+    // Text boxes: drag to move, the handle sets the wrap width, right-click deletes.
+    const textEl = (e.target as Element).closest('[data-text-part]');
+    const textId = textEl?.getAttribute('data-text-id');
+    const textBox = textId ? state.pipeline.texts.find((t) => t.id === textId) : undefined;
+    if (textBox && e.button === 2) {
+      state.edit((p) => void (p.texts = p.texts.filter((t) => t.id !== textBox.id)));
+      return;
+    }
+    if (textBox && e.button === 0 && (!tool || tool.type === 'text')) {
+      state.select({ text: textBox.id });
+      gesture.current =
+        textEl?.getAttribute('data-text-part') === 'handle'
+          ? { type: 'textResize', id: textBox.id, start: cell, w0: textBox.w }
+          : { type: 'textMove', id: textBox.id, start: cell, origin: { x: textBox.x, y: textBox.y }, moved: false };
+      return;
+    }
+
     // Areas: the name tag moves (with everything inside) or deletes on right-click; the handle resizes.
     const areaEl = (e.target as Element).closest('[data-area-part]');
     const areaId = areaEl?.getAttribute('data-area-id');
@@ -207,7 +227,8 @@ export function Canvas() {
         const inside = ops.areaContents(state.pipeline, area);
         const nodes = new Map(state.pipeline.nodes.filter((n) => inside.nodes.includes(n.id)).map((n) => [n.id, { x: n.x, y: n.y }]));
         const tiles = new Map(state.pipeline.belts.filter((t) => inside.tiles.includes(t.id)).map((t) => [t.id, { x: t.x, y: t.y }]));
-        gesture.current = { type: 'areaMove', id: area.id, start: cell, origin: { x: area.x, y: area.y }, nodes, tiles, last: { x: 0, y: 0 }, moved: false };
+        const texts = new Map(state.pipeline.texts.filter((t) => inside.texts.includes(t.id)).map((t) => [t.id, { x: t.x, y: t.y }]));
+        gesture.current = { type: 'areaMove', id: area.id, start: cell, origin: { x: area.x, y: area.y }, nodes, tiles, texts, last: { x: 0, y: 0 }, moved: false };
       }
       return;
     }
@@ -231,6 +252,16 @@ export function Canvas() {
       return;
     }
     if (e.button !== 0) return;
+
+    if (tool?.type === 'text') {
+      const box = { id: uid('text'), text: '', x: cell.x, y: cell.y, w: 6, size: 'm' as const, color: '', card: false };
+      state.edit((p) => void p.texts.push(box));
+      // Put the tool away and start typing into the new box.
+      state.setTool(null);
+      state.select({ text: box.id });
+      state.setEditText(box.id);
+      return;
+    }
 
     if (tool?.type === 'area') {
       gesture.current = { type: 'areaDraw', start: cell };
@@ -415,6 +446,35 @@ export function Canvas() {
       return;
     }
 
+    if (g.type === 'textResize') {
+      const w = Math.max(2, g.w0 + cell.x - g.start.x);
+      if (state.pipeline.texts.find((t) => t.id === g.id)?.w === w) return;
+      state.edit(
+        (p) => {
+          const t = p.texts.find((x) => x.id === g.id);
+          if (t) t.w = w;
+        },
+        { coalesce: `resize:${g.id}` },
+      );
+      return;
+    }
+
+    if (g.type === 'textMove') {
+      const x = g.origin.x + cell.x - g.start.x;
+      const y = g.origin.y + cell.y - g.start.y;
+      const cur = state.pipeline.texts.find((t) => t.id === g.id);
+      if (!cur || (cur.x === x && cur.y === y)) return;
+      state.edit(
+        (p) => {
+          const t = p.texts.find((v) => v.id === g.id);
+          if (t) Object.assign(t, { x, y });
+        },
+        { coalesce: `move:${g.id}` },
+      );
+      g.moved = true;
+      return;
+    }
+
     if (g.type === 'areaMove') {
       const dx = cell.x - g.start.x;
       const dy = cell.y - g.start.y;
@@ -436,6 +496,10 @@ export function Canvas() {
           }
           for (const t of p.belts) {
             const o = g.tiles.get(t.id);
+            if (o) Object.assign(t, { x: o.x + dx, y: o.y + dy });
+          }
+          for (const t of p.texts) {
+            const o = g.texts.get(t.id);
             if (o) Object.assign(t, { x: o.x + dx, y: o.y + dy });
           }
         },
@@ -676,6 +740,13 @@ export function Canvas() {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onPointerLeave={() => !gesture.current && setHover(null)}
+        onDoubleClick={(e) => {
+          // Double-click a text box to type into it.
+          const id = (e.target as Element).closest('[data-text-id]')?.getAttribute('data-text-id');
+          if (!id) return;
+          useFactory.getState().select({ text: id });
+          useFactory.getState().setEditText(id);
+        }}
       >
         <defs>
           <pattern id="grid" width={cellPx} height={cellPx} patternUnits="userSpaceOnUse" x={view.x} y={view.y}>
@@ -692,6 +763,12 @@ export function Canvas() {
             {areaPreview && (
               <rect className="area-preview" x={areaPreview.x * CELL} y={areaPreview.y * CELL} width={areaPreview.w * CELL} height={areaPreview.h * CELL} rx={14} />
             )}
+          </g>
+          {/* Notes sit on the floor, under belts and buildings. */}
+          <g className="layer-texts">
+            {pipeline.texts.map((t) => (
+              <TextView key={t.id} box={t} selected={selection.text === t.id} />
+            ))}
           </g>
           <BeltTiles tiles={pipeline.belts} inflow={inflow} selected={selectedTiles} dimmed={dimmedTiles} />
           <g className="layer-items">

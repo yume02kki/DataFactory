@@ -10,7 +10,7 @@ import { KIND_META, NODE_KINDS, examplePipeline } from './model/defaults';
 import * as storage from './model/storage';
 import { useFactory } from './store/useFactory';
 import { fitToView, pointer, zoomBy } from './lib/viewport';
-import { AREA_HOTKEY, BELT_HOTKEY, Hotbar, LINK_HOTKEY } from './components/Hotbar';
+import { AREA_HOTKEY, BELT_HOTKEY, Hotbar, LINK_HOTKEY, TEXT_HOTKEY } from './components/Hotbar';
 import { CELL } from './model/geometry';
 import * as ops from './model/ops';
 
@@ -159,6 +159,8 @@ export default function App() {
         s.setTool(s.tool?.type === 'belt' ? null : { type: 'belt' });
       } else if (key === LINK_HOTKEY) {
         s.setTool(s.tool?.type === 'link' ? null : { type: 'link' });
+      } else if (key === TEXT_HOTKEY) {
+        s.setTool(s.tool?.type === 'text' ? null : { type: 'text' });
       } else if (key === AREA_HOTKEY) {
         s.setTool(s.tool?.type === 'area' ? null : { type: 'area' });
       } else {

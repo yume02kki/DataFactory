@@ -146,6 +146,22 @@ export interface Area {
   h: number;
 }
 
+export type TextSize = 's' | 'm' | 'l';
+
+/** A free text note on the floor. Position is the top-left cell; text wraps to `w` cells. */
+export interface TextBox {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  w: number;
+  size: TextSize;
+  /** Text colour; empty for the theme's ink. */
+  color: string;
+  /** Draws the note on a card instead of straight on the floor. */
+  card: boolean;
+}
+
 export interface Viewport {
   x: number;
   y: number;
@@ -162,6 +178,7 @@ export interface Pipeline {
   belts: BeltTile[];
   arrows: Arrow[];
   areas: Area[];
+  texts: TextBox[];
   view: Viewport;
   createdAt: number;
   updatedAt: number;
@@ -175,6 +192,7 @@ export interface Selection {
   belt: string | null;
   arrow: string | null;
   area: string | null;
+  text: string | null;
   item: string | null;
 }
 
@@ -184,6 +202,8 @@ export type Tool =
   | { type: 'link' }
   /** Dragging out a new area. */
   | { type: 'area' }
+  /** Clicking places a text box. */
+  | { type: 'text' }
   /** Placing the copied selection (the clipboard). */
   | { type: 'paste' }
   | { type: 'building'; kind: NodeKind; blueprintId: string | null; template?: Partial<FactoryNode> };
