@@ -103,7 +103,7 @@ function snapshotWorld(textScale = 1) {
   const clone = world.cloneNode(true) as SVGGElement;
   clone.removeAttribute('transform');
   clone
-    .querySelectorAll('.hover-cell, .belt-ghost, .ghost-building, .marquee, .select-ring, .belt-glow, .belt-label, .pulse, .arrow-glow, .arrow-preview, .area-handle, .area-preview, .text-handle, .text-body.empty')
+    .querySelectorAll('.hover-cell, .belt-ghost, .ghost-building, .marquee, .select-ring, .belt-glow, .belt-label, .pulse, .arrow-glow, .arrow-preview, .area-handle, .area-preview, .text-handle, .text-body.empty, .arrow-handles')
     .forEach((el) => el.remove());
   clone.querySelectorAll('.dimmed, .dim, .sel, .selected').forEach((el) => el.classList.remove('dimmed', 'dim', 'sel', 'selected'));
   if (textScale !== 1) enlargeText(clone, textScale);

@@ -272,6 +272,22 @@ export function addArrow(p: Pipeline, from: string, to: string, color = ARROW_CO
   return { ok: true, id: arrow.id };
 }
 
+/** Adds a bend point to an arrow before bend `index` (0 = right after the start). */
+export function insertArrowPoint(p: Pipeline, id: string, index: number, at: Pt) {
+  const a = p.arrows.find((x) => x.id === id);
+  if (!a) return;
+  const pts = a.points ? [...a.points] : [];
+  pts.splice(Math.max(0, Math.min(index, pts.length)), 0, { x: at.x, y: at.y });
+  a.points = pts;
+}
+
+export function removeArrowPoint(p: Pipeline, id: string, index: number) {
+  const a = p.arrows.find((x) => x.id === id);
+  if (!a?.points) return;
+  a.points = a.points.filter((_, i) => i !== index);
+  if (!a.points.length) delete a.points;
+}
+
 export function removeArrow(p: Pipeline, id: string) {
   p.arrows = p.arrows.filter((a) => a.id !== id);
 }

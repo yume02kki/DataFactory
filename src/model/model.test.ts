@@ -684,3 +684,30 @@ describe('text boxes', () => {
     expect(ops.areaContents(p, { id: 'a', name: '', color: '', x: 0, y: 0, w: 5, h: 5 }).texts).toEqual(['in']);
   });
 });
+
+describe('arrow bends', () => {
+  it('adds, removes and keeps bend points', () => {
+    const p = blankPipeline();
+    const a = makeNode('source', 0, 0);
+    const b = makeNode('store', 6, 0);
+    p.nodes.push(a, b);
+    const r = ops.addArrow(p, a.id, b.id);
+    if (!r.ok) throw new Error(r.reason);
+    ops.insertArrowPoint(p, r.id, 0, { x: 0, y: 40 });
+    ops.insertArrowPoint(p, r.id, 1, { x: 40, y: 40 });
+    ops.insertArrowPoint(p, r.id, 0, { x: -40, y: 40 });
+    expect(p.arrows[0].points).toEqual([
+      { x: -40, y: 40 },
+      { x: 0, y: 40 },
+      { x: 40, y: 40 },
+    ]);
+    p.arrows[0].shape = 'elbow';
+    p.arrows[0].heads = 'both';
+    const back = normalizePipeline(JSON.parse(JSON.stringify(p)));
+    expect(back.arrows[0]).toMatchObject({ shape: 'elbow', heads: 'both', points: p.arrows[0].points });
+    ops.removeArrowPoint(p, r.id, 1);
+    ops.removeArrowPoint(p, r.id, 0);
+    ops.removeArrowPoint(p, r.id, 0);
+    expect(p.arrows[0].points).toBeUndefined();
+  });
+});

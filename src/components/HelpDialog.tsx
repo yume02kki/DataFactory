@@ -6,6 +6,7 @@ const CONTROLS: Array<[string, string]> = [
   ['1 · drag from a belt', 'Start on a belt and head sideways to split it; end on a belt to merge into it'],
   ['2 · 3 · 4 · 5', 'Source / machine / buffer / store tool'],
   ['6', 'Link tool: drag from one building onto another to draw an arrow'],
+  ['Selected arrow · drag +', 'Bend the arrow there (drag a bend to move it, right-click it to remove it)'],
   ['7 · Ctrl G', 'Area tool: drag a coloured background (Ctrl G wraps the selection)'],
   ['8', 'Text tool: click to place a note; double-click a note to edit it'],
   ['Palette tile', 'Build that component type'],

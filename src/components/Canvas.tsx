@@ -9,7 +9,7 @@ import { exportFactory, type ExportFormat } from '../lib/exportImage';
 import { BeltTiles, LinkItems } from './BeltView';
 import { NodeView } from './NodeView';
 import { BuildingArt } from './BuildingArt';
-import { ArrowPreview, ArrowView } from './ArrowView';
+import { ArrowPreview, ArrowView, arrowAnchor } from './ArrowView';
 import { AreaView } from './AreaView';
 import { TextView } from './TextView';
 import { uid } from '../model/ids';
@@ -26,6 +26,20 @@ export async function runExport(format: ExportFormat, region?: Rect, grid = fals
   } catch (err) {
     notify(err instanceof Error ? err.message : 'Export failed');
   }
+}
+
+/** Where an arrow's bends are measured from (see Arrow.points). */
+function arrowAnchorOf(p: Pipeline, id: string): Pt | null {
+  const a = p.arrows.find((x) => x.id === id);
+  const from = a && p.nodes.find((n) => n.id === a.from);
+  const to = a && p.nodes.find((n) => n.id === a.to);
+  return from && to ? arrowAnchor(nodeRect(from), nodeRect(to)) : null;
+}
+
+/** A bend under the cursor, snapped to a quarter cell so lines line up, as an offset from the anchor. */
+function bendOffset(world: Pt, anchor: Pt): Pt {
+  const q = CELL / 4;
+  return { x: Math.round(world.x / q) * q - anchor.x, y: Math.round(world.y / q) * q - anchor.y };
 }
 
 export type DragPayload = { type: 'item'; id: string };
@@ -51,6 +65,7 @@ type Gesture =
   | { type: 'areaDraw'; start: Pt }
   | { type: 'areaMove'; id: string; start: Pt; origin: Pt; nodes: Map<string, Pt>; tiles: Map<string, Pt>; texts: Map<string, Pt>; last: Pt; moved: boolean }
   | { type: 'textMove'; id: string; start: Pt; origin: Pt; moved: boolean }
+  | { type: 'arrowPoint'; id: string; index: number }
   | { type: 'textResize'; id: string; start: Pt; w0: number }
   | { type: 'areaResize'; id: string; start: Pt; w0: number; h0: number };
 
@@ -230,6 +245,23 @@ export function Canvas() {
         const texts = new Map(state.pipeline.texts.filter((t) => inside.texts.includes(t.id)).map((t) => [t.id, { x: t.x, y: t.y }]));
         gesture.current = { type: 'areaMove', id: area.id, start: cell, origin: { x: area.x, y: area.y }, nodes, tiles, texts, last: { x: 0, y: 0 }, moved: false };
       }
+      return;
+    }
+
+    // A selected arrow's bend handles: drag a + to add a bend, drag a bend to move it, right-click to remove it.
+    const handle = (e.target as Element).closest('[data-arrow-insert], [data-arrow-point]');
+    const handleArrow = handle?.closest('[data-arrow-id]')?.getAttribute('data-arrow-id');
+    if (handle && handleArrow && (e.button === 0 || e.button === 2)) {
+      const insert = handle.getAttribute('data-arrow-insert');
+      const index = Number(insert ?? handle.getAttribute('data-arrow-point'));
+      if (e.button === 2) {
+        if (insert === null) state.edit((p) => ops.removeArrowPoint(p, handleArrow, index));
+        return;
+      }
+      const anchor = arrowAnchorOf(state.pipeline, handleArrow);
+      if (insert !== null && anchor) state.edit((p) => ops.insertArrowPoint(p, handleArrow, index, bendOffset(world, anchor)));
+      else state.checkpoint();
+      gesture.current = { type: 'arrowPoint', id: handleArrow, index };
       return;
     }
 
@@ -442,6 +474,22 @@ export function Canvas() {
           if (a) Object.assign(a, { w, h });
         },
         { coalesce: `resize:${g.id}` },
+      );
+      return;
+    }
+
+    if (g.type === 'arrowPoint') {
+      const anchor = arrowAnchorOf(state.pipeline, g.id);
+      if (!anchor) return;
+      const at = bendOffset(world, anchor);
+      const cur = state.pipeline.arrows.find((a) => a.id === g.id)?.points?.[g.index];
+      if (!cur || (cur.x === at.x && cur.y === at.y)) return;
+      state.edit(
+        (p) => {
+          const pt = p.arrows.find((a) => a.id === g.id)?.points?.[g.index];
+          if (pt) Object.assign(pt, at);
+        },
+        { coalesce: `bend:${g.id}:${g.index}`, history: false },
       );
       return;
     }
@@ -741,6 +789,13 @@ export function Canvas() {
         onPointerCancel={onPointerUp}
         onPointerLeave={() => !gesture.current && setHover(null)}
         onDoubleClick={(e) => {
+          // Double-click a bend point to remove it.
+          const bend = (e.target as Element).closest('[data-arrow-point]');
+          const bendArrow = bend?.closest('[data-arrow-id]')?.getAttribute('data-arrow-id');
+          if (bend && bendArrow) {
+            useFactory.getState().edit((p) => ops.removeArrowPoint(p, bendArrow, Number(bend.getAttribute('data-arrow-point'))));
+            return;
+          }
           // Double-click a text box to type into it.
           const id = (e.target as Element).closest('[data-text-id]')?.getAttribute('data-text-id');
           if (!id) return;

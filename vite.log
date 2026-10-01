@@ -6,3 +6,19 @@
   ➜  Network: use --host to expose
 12:48:46 PM [vite] (client) hmr update /src/components/Inspector.tsx
 12:49:11 PM [vite] (client) hmr update /src/components/Canvas.tsx
+12:50:28 PM [vite] (client) hmr update /src/components/ArrowView.tsx
+12:50:28 PM [vite] (client) hmr update /src/App.tsx, /src/components/TopBar.tsx
+12:50:46 PM [vite] (client) hmr update /src/components/ArrowView.tsx
+12:51:08 PM [vite] (client) hmr update /src/components/Canvas.tsx
+12:51:08 PM [vite] (client) page reload src/model/ops.ts
+12:51:26 PM [vite] (client) hmr update /src/components/Inspector.tsx
+12:51:26 PM [vite] (client) hmr update /src/styles.css
+12:51:26 PM [vite] (client) hmr update /src/components/Canvas.tsx
+12:51:48 PM [vite] (client) hmr update /src/components/Inspector.tsx
+12:51:48 PM [vite] (client) hmr update /src/components/ArrowView.tsx
+12:51:48 PM [vite] (client) hmr update /src/components/Canvas.tsx
+12:51:54 PM [vite] (client) hmr update /src/components/Canvas.tsx
+12:53:39 PM [vite] (client) hmr update /src/components/Inspector.tsx
+12:53:48 PM [vite] (client) hmr update /src/components/Inspector.tsx
+12:54:25 PM [vite] (client) hmr update /src/components/ArrowView.tsx
+12:54:44 PM [vite] (client) hmr update /src/components/HelpDialog.tsx

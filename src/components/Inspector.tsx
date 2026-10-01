@@ -77,13 +77,22 @@ function Header({ icon, eyebrow, title }: { icon: React.ReactNode; eyebrow: stri
   );
 }
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-  return (
+/** A labelled control. Rows of buttons (`group`) get a group role, not a <label>, which would name only the first button. */
+function Field({ label, children, hint, group }: { label: string; children: React.ReactNode; hint?: string; group?: boolean }) {
+  const head = (
+    <span className="field-label">
+      {label}
+      {hint && <span className="field-hint">{hint}</span>}
+    </span>
+  );
+  return group ? (
+    <div className="field" role="group" aria-label={label}>
+      {head}
+      {children}
+    </div>
+  ) : (
     <label className="field">
-      <span className="field-label">
-        {label}
-        {hint && <span className="field-hint">{hint}</span>}
-      </span>
+      {head}
       {children}
     </label>
   );
@@ -304,13 +313,13 @@ function NodeInspector({ node, pipeline, links }: { node: FactoryNode; pipeline:
       <Field label="Description">
         <textarea rows={2} value={node.description} onChange={(e) => set('description', e.target.value)} placeholder="What happens here?" />
       </Field>
-      <Field label="Icon" hint={`${ICON_NAMES.length} to pick from`}>
+      <Field label="Icon" hint={`${ICON_NAMES.length} to pick from`} group>
         <IconPicker value={node.icon} onChange={(icon) => set('icon', icon)} />
       </Field>
-      <Field label="Colour">
+      <Field label="Colour" group>
         <Swatches value={node.color} first={meta.color} onChange={(c) => set('color', c)} />
       </Field>
-      <Field label="Facing" hint="R / Shift R">
+      <Field label="Facing" hint="R / Shift R" group>
         <div className="rotate-row">
           <button className="btn" onClick={() => useFactory.getState().rotate(-1)} aria-label="Rotate left">
             ⟲
@@ -444,7 +453,7 @@ function TextInspector({ box }: { box: TextBox }) {
       <Field label="Text" hint="Enter for a new line">
         <textarea ref={ref} rows={4} value={box.text} placeholder="Write a note…" onChange={(e) => set('text', e.target.value, true)} />
       </Field>
-      <Field label="Size">
+      <Field label="Size" group>
         <div className="segmented">
           {(Object.keys(TEXT_SIZES) as Array<keyof typeof TEXT_SIZES>).map((s) => (
             <button key={s} className={box.size === s ? 'on' : ''} onClick={() => set('size', s)}>
@@ -453,7 +462,7 @@ function TextInspector({ box }: { box: TextBox }) {
           ))}
         </div>
       </Field>
-      <Field label="Colour">
+      <Field label="Colour" group>
         <div className="swatches">
           <button type="button" className={`swatch ink${box.color ? '' : ' active'}`} onClick={() => set('color', '')} aria-label="Default colour" title="Default" />
           {SWATCHES.map((s) => (
@@ -461,7 +470,7 @@ function TextInspector({ box }: { box: TextBox }) {
           ))}
         </div>
       </Field>
-      <Field label="Background">
+      <Field label="Background" group>
         <div className="segmented">
           <button className={box.card ? '' : 'on'} onClick={() => set('card', false)}>
             None
@@ -499,7 +508,7 @@ function AreaInspector({ area, pipeline }: { area: Area; pipeline: Pipeline }) {
       <Field label="Name">
         <input value={area.name} placeholder="e.g. Ingest, Serving layer" onChange={(e) => set('name', e.target.value, true)} />
       </Field>
-      <Field label="Colour">
+      <Field label="Colour" group>
         <Swatches value={area.color} onChange={(c) => set('color', c)} />
       </Field>
       <p className="muted small">
@@ -700,10 +709,25 @@ function ArrowInspector({ arrow, pipeline }: { arrow: Arrow; pipeline: Pipeline 
       <Field label="Label" hint="optional">
         <input value={arrow.label} placeholder="e.g. reads from, looks up, triggers" onChange={(e) => set('label', e.target.value, true)} />
       </Field>
-      <Field label="Colour">
+      <Field label="Colour" group>
         <Swatches value={arrow.color} first={ARROW_COLOR} onChange={(c) => set('color', c)} />
       </Field>
-      <Field label="Line">
+      <Field label="Path" group>
+        <div className="segmented">
+          {(
+            [
+              ['curved', 'Curved'],
+              ['straight', 'Straight'],
+              ['elbow', 'Right angles'],
+            ] as const
+          ).map(([v, label]) => (
+            <button key={v} className={(arrow.shape ?? 'curved') === v ? 'on' : ''} onClick={() => set('shape', v)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Line" group>
         <div className="segmented">
           <button className={arrow.dashed ? '' : 'on'} onClick={() => set('dashed', false)}>
             Solid
@@ -713,6 +737,25 @@ function ArrowInspector({ arrow, pipeline }: { arrow: Arrow; pipeline: Pipeline 
           </button>
         </div>
       </Field>
+      <Field label="Arrowheads" group>
+        <div className="segmented">
+          {(
+            [
+              ['end', 'At target'],
+              ['both', 'Both ends'],
+              ['none', 'None'],
+            ] as const
+          ).map(([v, label]) => (
+            <button key={v} className={(arrow.heads ?? 'end') === v ? 'on' : ''} onClick={() => set('heads', v)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </Field>
+      <p className="muted small">
+        Drag a <b>+</b> on the arrow to bend it there; drag a bend to move it, right-click or double-click a bend to remove it.
+        {arrow.points?.length ? ` ${arrow.points.length} bend${arrow.points.length === 1 ? '' : 's'}.` : ''}
+      </p>
       <div className="insp-actions">
         <button
           className="btn"
@@ -721,12 +764,19 @@ function ArrowInspector({ arrow, pipeline }: { arrow: Arrow; pipeline: Pipeline 
           onClick={() =>
             edit((p) => {
               const a = p.arrows.find((x) => x.id === arrow.id);
-              if (a) [a.from, a.to] = [a.to, a.from];
+              if (!a) return;
+              [a.from, a.to] = [a.to, a.from];
+              a.points?.reverse();
             })
           }
         >
           ⇄ Flip
         </button>
+        {!!arrow.points?.length && (
+          <button className="btn" onClick={() => edit((p) => void delete p.arrows.find((x) => x.id === arrow.id)?.points)} title="Remove every bend">
+            Reset path
+          </button>
+        )}
         <button className="btn danger" onClick={() => useFactory.getState().deleteSelection()}>
           Delete <kbd>Del</kbd>
         </button>
@@ -766,7 +816,7 @@ function ItemInspector({ item, pipeline, links }: { item: ItemType; pipeline: Pi
         <DerivedNote item={item} pipeline={pipeline} />
       ) : (
         <>
-      <Field label="Shape">
+      <Field label="Shape" group>
         <div className="shape-picker">
           {ITEM_SHAPES.map((s) => (
             <button key={s} type="button" className={`shape-btn${item.shape === s ? ' active' : ''}`} onClick={() => set('shape', s)} aria-label={s} title={s}>
@@ -775,7 +825,7 @@ function ItemInspector({ item, pipeline, links }: { item: ItemType; pipeline: Pi
           ))}
         </div>
       </Field>
-      <Field label="Colour">
+      <Field label="Colour" group>
         <Swatches value={item.color} onChange={(c) => set('color', c)} />
       </Field>
         </>

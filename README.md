@@ -122,7 +122,11 @@ Some relationships aren't items on a belt: a service that *reads from* a queue
 and a bucket, or a lookup. The **Link** tool (`6`, the arrow in the hotbar) draws
 these as arrows. Drag from one building onto another. A building can point at as
 many others as you like. Click an arrow to give it a label (e.g. "reads from"),
-change its colour, make it dashed or flip its direction. Right-click an arrow to
+change its colour, make it dashed or flip its direction. Its **path** can be
+curved, straight or right angles, with arrowheads at the target, at both ends or
+none. A selected arrow shows **+** handles along it: drag one to add a bend there,
+drag a bend to move it, and right-click or double-click a bend to remove it
+(*Reset path* clears them all). Bends move along with the buildings. Right-click an arrow to
 delete it. A building's inspector lists the arrows to and from it.
 
 ## Areas

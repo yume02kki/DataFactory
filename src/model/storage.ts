@@ -282,6 +282,12 @@ function readArrows(raw: Record<string, unknown>, nodeIds: Set<string>): Arrow[]
       label: str(o.label),
       color: str(o.color, ARROW_COLOR),
       dashed: o.dashed === true,
+      ...(['straight', 'elbow'].includes(o.shape as string) && { shape: o.shape as Arrow['shape'] }),
+      ...(['both', 'none'].includes(o.heads as string) && { heads: o.heads as Arrow['heads'] }),
+      ...(Array.isArray(o.points) &&
+        o.points.length && {
+          points: o.points.map((v) => obj(v)).filter((v) => Number.isFinite(v.x) && Number.isFinite(v.y)).map((v) => ({ x: num(v.x), y: num(v.y) })),
+        }),
     }));
 }
 

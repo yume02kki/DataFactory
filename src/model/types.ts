@@ -122,6 +122,9 @@ export interface BeltTile {
  * A drawn arrow between two buildings for relationships that aren't item flow,
  * e.g. "reads from" or "looks up". One building can point at many.
  */
+export type ArrowShape = 'curved' | 'straight' | 'elbow';
+export type ArrowHeads = 'end' | 'both' | 'none';
+
 export interface Arrow {
   id: string;
   from: string;
@@ -129,6 +132,15 @@ export interface Arrow {
   label: string;
   color: string;
   dashed: boolean;
+  /** How the line runs (curved when absent). */
+  shape?: ArrowShape;
+  /** Which ends get an arrowhead (the target end when absent). */
+  heads?: ArrowHeads;
+  /**
+   * Bend points the line passes through, in world pixels relative to the
+   * point halfway between the two buildings' centres (so they move with them).
+   */
+  points?: Array<{ x: number; y: number }>;
 }
 
 /**

@@ -2069,3 +2069,30 @@ select:focus {
   stroke-linecap: round;
   fill: none;
 }
+
+/* ---------- arrow bend handles ---------- */
+.arrow-add {
+  cursor: copy;
+  opacity: 0.75;
+}
+.arrow-add:hover {
+  opacity: 1;
+}
+.arrow-add circle {
+  fill: var(--panel-solid);
+  stroke: var(--select);
+  stroke-width: 1.8;
+}
+.arrow-add path {
+  stroke: var(--select);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.arrow-point {
+  fill: var(--panel-solid);
+  stroke-width: 2.6;
+  cursor: grab;
+}
+.arrow-point:hover {
+  fill: var(--select);
+}
